@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary: Teal Light for Dark Mode -->
+    <color name="primary">#4DB6AC</color>
+    <color name="primary_variant">#00897B</color>
+    <color name="primary_light">#80CBC4</color>
+    <color name="primary_dark">#00695C</color>
+
+    <!-- Secondary -->
+    <color name="secondary">#FF8A65</color>
+    <color name="accent">#FF8A65</color>
+
+    <!-- Backgrounds & Surfaces -->
+    <color name="app_background">#0F1419</color>
+    <color name="surface_color">#1A1F2E</color>
+    <color name="card_background">#1E2538</color>
+
+    <!-- Text -->
+    <color name="text_primary">#F0F0F0</color>
+    <color name="text_secondary">#9CA3AF</color>
+    <color name="text_on_primary">#000000</color>
+    <color name="text_on_surface">#F0F0F0</color>
+
+    <!-- Status Colors -->
+    <color name="status_taken">#66BB6A</color>
+    <color name="status_missed">#EF5350</color>
+    <color name="status_active">#4DB6AC</color>
+    <color name="status_expired">#757575</color>
+
+    <!-- Semantic -->
+    <color name="error">#EF5350</color>
+    <color name="warning">#FFB74D</color>
+    <color name="success">#66BB6A</color>
+
+    <!-- UI Elements -->
+    <color name="switch_thumb">#4DB6AC</color>
+    <color name="switch_track">#37474F</color>
+    <color name="divider">#2C2C2C</color>
+    <color name="ripple">#1A4DB6AC</color>
+
+    <!-- Card Indicators -->
+    <color name="indicator_active">#4DB6AC</color>
+    <color name="indicator_taken">#66BB6A</color>
+    <color name="indicator_missed">#EF5350</color>
+    <color name="indicator_expired">#616161</color>
+
+    <!-- Legacy -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="gray">#757575</color>
+    <color name="primary_container">#1A3A36</color>
+    <color name="ic_launcher_background">#FF121212</color>
+
+    <!-- Gradient -->
+    <color name="gradient_start">#1A3A36</color>
+    <color name="gradient_end">#1E4A44</color>
+</resources>
