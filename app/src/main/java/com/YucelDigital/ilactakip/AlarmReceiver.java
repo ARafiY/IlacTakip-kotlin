@@ -108,8 +108,12 @@ public class AlarmReceiver extends BroadcastReceiver {
         }).start();
     }
 
-    /** Ana alarm tetiklendiğinde bildirim inşası + kendini yeniden kurma (arka planda çalışır). */
-    private void handleMainAlarm(Context context, String name, String time, String note, int alarmId,
+    /**
+     * Ana alarm tetiklendiğinde bildirim inşası + kendini yeniden kurma (arka planda çalışır).
+     * Paket-private: test kodu (Robolectric) goAsync()/arka plan thread'ini devreye sokmadan
+     * bu mantığı doğrudan ve senkron çağırabilsin diye.
+     */
+    void handleMainAlarm(Context context, String name, String time, String note, int alarmId,
             long startDate, long endDate, int intervalDays, String soundUriStr,
             boolean isCustomDay, int customDay) {
 
@@ -129,7 +133,6 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
 
         if (!isAlreadyTaken) {
-            Uri soundUri = resolveSoundUri(soundUriStr);
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
             Intent fullScreenIntent = new Intent(context, AlarmActivity.class);
@@ -161,11 +164,11 @@ public class AlarmReceiver extends BroadcastReceiver {
                     nm.createNotificationChannel(channel);
                 buildAndNotify(context, nm, CHANNEL_ID, name, time, note,
                         alarmId, startDate, endDate, intervalDays, soundUriStr,
-                        isCustomDay, customDay, fullScreenPI, soundUri);
+                        isCustomDay, customDay, fullScreenPI);
             } else {
                 buildAndNotify(context, nm, CHANNEL_ID, name, time, note,
                         alarmId, startDate, endDate, intervalDays, soundUriStr,
-                        isCustomDay, customDay, fullScreenPI, soundUri);
+                        isCustomDay, customDay, fullScreenPI);
             }
         }
 
@@ -192,7 +195,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             String name, String time, String note, int alarmId,
             long startDate, long endDate, int intervalDays,
             String soundUriStr, boolean isCustomDay, int customDay,
-            PendingIntent fullScreenPI, Uri soundUri) {
+            PendingIntent fullScreenPI) {
 
         // "İlaç Aldım" aksiyon
         Intent takenIntent = new Intent(context, NotificationActionReceiver.class);
@@ -236,20 +239,15 @@ public class AlarmReceiver extends BroadcastReceiver {
                 .addAction(R.drawable.ic_medicine_white, "✓ İlaç Aldım", takenPI)
                 .addAction(R.drawable.ic_note, "⏰ Ertele", snoozePI);
 
-        // Cihaz kilitliyse full-screen intent otomatik açılır ve AlarmActivity kendi
-        // sesini çalar — bildirime ayrıca ses eklersek çift ses duyulur. Kilitli
-        // değilse full-screen intent genelde sadece heads-up bildirim olarak
-        // gösterilir, bu yüzden sesi bildirim üzerinden çalmamız gerekir.
-        // (Not: PowerManager.isInteractive() burada yanıltıcıdır — ekran açık ama
-        // kilitli olabilir.)
-        android.app.KeyguardManager km =
-                (android.app.KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
-        boolean isLocked = km != null && km.isKeyguardLocked();
-        if (isLocked) {
-            builder.setSound(null);
-        } else {
-            builder.setSound(soundUri);
-        }
+        // Bildirime KASITLI OLARAK ses eklenmiyor (builder.setSound(...) çağırmayın).
+        // androidx.core.app.NotificationCompatBuilder, channelId'li bir builder'da API 26+
+        // için Builder.setSound(...)'u her zaman sessizce mBuilder.setSound(null) ile
+        // geçersiz kılıyor (bkz. NotificationCompatBuilder.buildInternal()) — yani bu
+        // satıra ne yazarsak yazalım gerçek cihazda (Android 8+) hiçbir zaman çalmaz,
+        // sadece yanıltıcı olur. Kanal da (yukarıda) zaten sessiz oluşturuluyor.
+        // Sesin TEK kaynağı AlarmActivity.playAlarmSound() — tam ekran intent
+        // (yukarıdaki setFullScreenIntent) hem kilitli hem kilitsiz durumda güvenilir
+        // şekilde açılıp AlarmActivity'yi tetikler, çift ses riski de böylece ortadan kalkar.
 
         if (nm != null)
             nm.notify(alarmId, builder.build());
