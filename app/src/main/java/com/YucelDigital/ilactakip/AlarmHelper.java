@@ -21,7 +21,7 @@ public class AlarmHelper {
      * Integer.MIN_VALUE döndürürse Math.abs onu pozitife çeviremez
      * (Integer.MIN_VALUE'nin mutlak değeri int aralığında temsil edilemez).
      */
-    static int safeId(String key) {
+    public static int safeId(String key) {
         return key.hashCode() & 0x7fffffff;
     }
 
