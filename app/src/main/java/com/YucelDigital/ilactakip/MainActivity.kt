@@ -42,9 +42,9 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -450,12 +450,12 @@ private fun MainScreen(
     onDeleteConfirmed: (Medicine) -> Unit,
 ) {
     Scaffold(
-        containerColor = colorResource(R.color.app_background),
+        containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddClick,
-                containerColor = colorResource(R.color.primary),
-                contentColor = colorResource(R.color.white),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = "Yeni İlaç Ekle")
             }
@@ -493,27 +493,27 @@ private fun MainScreen(
 
 @Composable
 private fun Header() {
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(colorResource(R.color.gradient_start), colorResource(R.color.gradient_end)),
-                ),
-            )
+            .background(Brush.verticalGradient(listOf(primary, secondary)))
             .padding(horizontal = 24.dp)
             .padding(top = 48.dp, bottom = 24.dp),
     ) {
         Text(
             text = "💊 İlaç Takip",
-            color = colorResource(R.color.white),
+            color = onPrimary,
             fontSize = 32.sp,
             fontWeight = FontWeight.Medium,
         )
         Spacer(Modifier.height(4.dp))
         Text(
             text = "Sağlığınız bizim önceliğimiz",
-            color = Color(0xB2FFFFFF),
+            color = onPrimary.copy(alpha = 0.7f),
             fontSize = 14.sp,
         )
     }
@@ -534,13 +534,13 @@ private fun EmptyState(modifier: Modifier = Modifier) {
             text = "Henüz ilaç eklenmedi",
             fontSize = 20.sp,
             fontWeight = FontWeight.Medium,
-            color = colorResource(R.color.text_primary),
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = "Aşağıdaki + butonuna basarak\nilk ilacınızı ekleyin",
             fontSize = 15.sp,
-            color = colorResource(R.color.text_secondary),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             lineHeight = 19.5.sp,
         )
@@ -607,7 +607,7 @@ private fun MedicineCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colorResource(R.color.surface_color)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -638,10 +638,9 @@ private fun MedicineCard(
                         checked = medicine.isActive,
                         onCheckedChange = onActiveChanged,
                         enabled = !isExpired,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = colorResource(R.color.switch_thumb),
-                            checkedTrackColor = colorResource(R.color.switch_track),
-                        ),
+                        // Özel renk vermiyoruz — M3'ün varsayılan Switch renkleri zaten
+                        // MaterialTheme.colorScheme.primary'den geliyor, dynamic color'ı
+                        // otomatik takip eder.
                     )
                 }
 
@@ -651,7 +650,7 @@ private fun MedicineCard(
                     text = medicine.name,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium,
-                    color = colorResource(R.color.text_primary),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -664,7 +663,7 @@ private fun MedicineCard(
                         text = timeText,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
-                        color = colorResource(R.color.primary),
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     if (!medicine.isUseCustomDays && !dateRange.isNullOrEmpty()) {
                         Spacer(Modifier.width(12.dp))
@@ -672,7 +671,7 @@ private fun MedicineCard(
                         Text(
                             text = dateRange,
                             fontSize = 12.sp,
-                            color = colorResource(R.color.text_secondary),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -688,7 +687,7 @@ private fun MedicineCard(
                         Text(
                             text = note,
                             fontSize = 13.sp,
-                            color = colorResource(R.color.text_secondary),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -704,13 +703,13 @@ private fun MedicineCard(
                     checked = medicine.isTaken,
                     onCheckedChange = { if (!isExpired) onTakenChanged(it) },
                     enabled = !isExpired,
-                    colors = CheckboxDefaults.colors(checkedColor = colorResource(R.color.primary)),
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
                 )
                 Spacer(Modifier.height(8.dp))
                 Icon(
                     painter = painterResource(R.drawable.ic_delete),
                     contentDescription = "Sil",
-                    tint = colorResource(R.color.gray),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(22.dp)
                         .clickable { showDeleteDialog = true },
