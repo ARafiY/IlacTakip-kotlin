@@ -75,7 +75,7 @@ public class BootReceiver extends BroadcastReceiver {
             alarmIntent.putExtra("IS_CUSTOM_DAY",  false);
             alarmIntent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false);
 
-            int alarmId = Math.abs((medicine.getName() + singleTime).hashCode());
+            int alarmId = AlarmHelper.safeId(medicine.getName() + singleTime);
             alarmIntent.putExtra("ALARM_ID", alarmId);
 
             PendingIntent pi = PendingIntent.getBroadcast(
@@ -141,7 +141,7 @@ public class BootReceiver extends BroadcastReceiver {
                 alarmIntent.putExtra("CUSTOM_DAY",     calDay);
                 alarmIntent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false);
 
-                int alarmId = Math.abs((medicine.getName() + "_day" + calDay + "_" + singleTime).hashCode());
+                int alarmId = AlarmHelper.safeId(medicine.getName() + "_day" + calDay + "_" + singleTime);
                 alarmIntent.putExtra("ALARM_ID", alarmId);
 
                 PendingIntent pi = PendingIntent.getBroadcast(

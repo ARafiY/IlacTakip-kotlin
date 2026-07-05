@@ -162,8 +162,10 @@ public class AlarmActivity extends AppCompatActivity {
                             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                             .build());
             mediaPlayer.setLooping(true); // Ses tekrar tekrar çalar
-            mediaPlayer.prepare();
-            mediaPlayer.start();
+            // prepare() ana thread'i bloklar (özellikle content:// URI'lerde ANR riski);
+            // prepareAsync() + listener kullanılıyor.
+            mediaPlayer.setOnPreparedListener(MediaPlayer::start);
+            mediaPlayer.prepareAsync();
         } catch (Exception e) {
             e.printStackTrace();
             if (mediaPlayer != null) {

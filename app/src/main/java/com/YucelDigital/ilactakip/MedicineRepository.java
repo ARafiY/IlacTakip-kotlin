@@ -42,7 +42,14 @@ public class MedicineRepository {
         }
     }
 
-    /** Belirli bir ilacı "alındı" olarak işaretle (thread-safe) */
+    /**
+     * Belirli bir ilacı "alındı" olarak işaretle (thread-safe).
+     * İsimle eşleştirilir — güne özel modda Medicine.time sadece tek bir günün
+     * saatini tuttuğu için (bkz. AddMedicineActivity.saveCustomDayAlarm), saat
+     * bazlı eşleştirme farklı günler/saatler için hatalı biçimde eşleşmeyi
+     * kaçırıyordu. İsim tekilliği zaten UI tarafında (isDuplicateName) garanti
+     * edildiğinden sadece isimle eşleştirmek güvenlidir.
+     */
     public static void markAsTaken(Context context, String medicineName, String medicineTime) {
         synchronized (LOCK) {
             List<Medicine> list = loadMedicineListInternal(context);
@@ -50,7 +57,7 @@ public class MedicineRepository {
 
             boolean changed = false;
             for (Medicine m : list) {
-                if (m.getName().equalsIgnoreCase(medicineName) && m.getTime() != null && m.getTime().contains(medicineTime)) {
+                if (m.getName().equalsIgnoreCase(medicineName)) {
                     m.setTaken(true);
                     changed = true;
                     break;

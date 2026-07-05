@@ -282,7 +282,7 @@ public class MainActivity extends AppCompatActivity implements AlarmAdapter.OnMe
             intent.putExtra("IS_CUSTOM_DAY",  false);
             intent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false);
 
-            int alarmId = Math.abs((medicine.getName() + singleTime).hashCode());
+            int alarmId = AlarmHelper.safeId(medicine.getName() + singleTime);
             intent.putExtra("ALARM_ID", alarmId);
 
             PendingIntent pi = PendingIntent.getBroadcast(
@@ -341,7 +341,7 @@ public class MainActivity extends AppCompatActivity implements AlarmAdapter.OnMe
                 intent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false);
 
                 // Benzersiz alarm ID: isim + gün + saat
-                int alarmId = Math.abs((medicine.getName() + "_day" + calDay + "_" + singleTime).hashCode());
+                int alarmId = AlarmHelper.safeId(medicine.getName() + "_day" + calDay + "_" + singleTime);
                 intent.putExtra("ALARM_ID", alarmId);
 
                 PendingIntent pi = PendingIntent.getBroadcast(

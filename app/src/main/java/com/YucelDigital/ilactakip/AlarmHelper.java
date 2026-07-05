@@ -16,6 +16,16 @@ import java.util.Map;
 public class AlarmHelper {
 
     /**
+     * hashCode()'dan negatif olmayan bir kimlik üretir.
+     * Math.abs(hashCode()) kullanılmıyor çünkü hashCode() tam olarak
+     * Integer.MIN_VALUE döndürürse Math.abs onu pozitife çeviremez
+     * (Integer.MIN_VALUE'nin mutlak değeri int aralığında temsil edilemez).
+     */
+    static int safeId(String key) {
+        return key.hashCode() & 0x7fffffff;
+    }
+
+    /**
      * Bir ilaca ait tüm alarmları (ana alarm + reset alarm) iptal eder.
      * Güne özel ve standart mod destekler.
      */
@@ -37,8 +47,8 @@ public class AlarmHelper {
         String[] timeArray = medicine.getTime().split(", ");
         for (String singleTime : timeArray) {
             singleTime = singleTime.trim();
-            int alarmId      = Math.abs((medicine.getName() + singleTime).hashCode());
-            int resetAlarmId = Math.abs((medicine.getName() + singleTime + "_reset").hashCode());
+            int alarmId      = safeId(medicine.getName() + singleTime);
+            int resetAlarmId = safeId(medicine.getName() + singleTime + "_reset");
 
             Intent intent = new Intent(context, AlarmReceiver.class);
 
@@ -69,8 +79,8 @@ public class AlarmHelper {
 
             for (String singleTime : times) {
                 singleTime = singleTime.trim();
-                int alarmId = Math.abs((medicine.getName() + "_day" + calDay + "_" + singleTime).hashCode());
-                int resetAlarmId = Math.abs((medicine.getName() + "_day" + calDay + "_" + singleTime + "_reset").hashCode());
+                int alarmId = safeId(medicine.getName() + "_day" + calDay + "_" + singleTime);
+                int resetAlarmId = safeId(medicine.getName() + "_day" + calDay + "_" + singleTime + "_reset");
 
                 PendingIntent pi = PendingIntent.getBroadcast(
                         context, alarmId, intent,
