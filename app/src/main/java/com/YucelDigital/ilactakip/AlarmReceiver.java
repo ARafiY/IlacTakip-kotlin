@@ -93,11 +93,38 @@ public class AlarmReceiver extends BroadcastReceiver {
             }
         }
 
+        // ---- ANA ALARM: Bildirim inşası + isTaken kontrolü disk I/O gerektirir.
+        // onReceive'i (ve dolayısıyla ana thread'i) hızlıca serbest bırakmak için
+        // bu kısmı arka planda çalıştırıyoruz.
+        Context appContext = context.getApplicationContext();
+        PendingResult pendingResult = goAsync();
+        new Thread(() -> {
+            try {
+                handleMainAlarm(appContext, name, time, note, alarmId, startDate, endDate,
+                        intervalDays, soundUriStr, isCustomDay, customDay);
+            } finally {
+                pendingResult.finish();
+            }
+        }).start();
+    }
+
+    /**
+     * Ana alarm tetiklendiğinde bildirim inşası + kendini yeniden kurma (arka planda çalışır).
+     * Paket-private: test kodu (Robolectric) goAsync()/arka plan thread'ini devreye sokmadan
+     * bu mantığı doğrudan ve senkron çağırabilsin diye.
+     */
+    void handleMainAlarm(Context context, String name, String time, String note, int alarmId,
+            long startDate, long endDate, int intervalDays, String soundUriStr,
+            boolean isCustomDay, int customDay) {
+
         // ---- ANA ALARM: Bildirim Göster ----
+        // İsimle eşleştirilir (bkz. MedicineRepository.markAsTaken açıklaması) —
+        // güne özel modda Medicine.time sadece tek bir günün saatini tuttuğu için
+        // saat bazlı eşleştirme hatalı biçimde eşleşmeyi kaçırıyordu.
         boolean isAlreadyTaken = false;
         List<Medicine> medicineList = MedicineRepository.loadMedicineList(context);
         for (Medicine m : medicineList) {
-            if (m.getName().equalsIgnoreCase(name) && m.getTime() != null && m.getTime().contains(time)) {
+            if (m.getName().equalsIgnoreCase(name)) {
                 if (m.isTaken()) {
                     isAlreadyTaken = true;
                 }
@@ -106,7 +133,6 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
 
         if (!isAlreadyTaken) {
-            Uri soundUri = resolveSoundUri(soundUriStr);
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
             Intent fullScreenIntent = new Intent(context, AlarmActivity.class);
@@ -138,11 +164,11 @@ public class AlarmReceiver extends BroadcastReceiver {
                     nm.createNotificationChannel(channel);
                 buildAndNotify(context, nm, CHANNEL_ID, name, time, note,
                         alarmId, startDate, endDate, intervalDays, soundUriStr,
-                        isCustomDay, customDay, fullScreenPI, soundUri);
+                        isCustomDay, customDay, fullScreenPI);
             } else {
                 buildAndNotify(context, nm, CHANNEL_ID, name, time, note,
                         alarmId, startDate, endDate, intervalDays, soundUriStr,
-                        isCustomDay, customDay, fullScreenPI, soundUri);
+                        isCustomDay, customDay, fullScreenPI);
             }
         }
 
@@ -169,7 +195,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             String name, String time, String note, int alarmId,
             long startDate, long endDate, int intervalDays,
             String soundUriStr, boolean isCustomDay, int customDay,
-            PendingIntent fullScreenPI, Uri soundUri) {
+            PendingIntent fullScreenPI) {
 
         // "İlaç Aldım" aksiyon
         Intent takenIntent = new Intent(context, NotificationActionReceiver.class);
@@ -213,13 +239,15 @@ public class AlarmReceiver extends BroadcastReceiver {
                 .addAction(R.drawable.ic_medicine_white, "✓ İlaç Aldım", takenPI)
                 .addAction(R.drawable.ic_note, "⏰ Ertele", snoozePI);
 
-        android.os.PowerManager pm = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        boolean isScreenOn = pm != null && pm.isInteractive();
-        if (isScreenOn) {
-            builder.setSound(soundUri);
-        } else {
-            builder.setSound(null);
-        }
+        // Bildirime KASITLI OLARAK ses eklenmiyor (builder.setSound(...) çağırmayın).
+        // androidx.core.app.NotificationCompatBuilder, channelId'li bir builder'da API 26+
+        // için Builder.setSound(...)'u her zaman sessizce mBuilder.setSound(null) ile
+        // geçersiz kılıyor (bkz. NotificationCompatBuilder.buildInternal()) — yani bu
+        // satıra ne yazarsak yazalım gerçek cihazda (Android 8+) hiçbir zaman çalmaz,
+        // sadece yanıltıcı olur. Kanal da (yukarıda) zaten sessiz oluşturuluyor.
+        // Sesin TEK kaynağı AlarmActivity.playAlarmSound() — tam ekran intent
+        // (yukarıdaki setFullScreenIntent) hem kilitli hem kilitsiz durumda güvenilir
+        // şekilde açılıp AlarmActivity'yi tetikler, çift ses riski de böylece ortadan kalkar.
 
         if (nm != null)
             nm.notify(alarmId, builder.build());
@@ -393,7 +421,7 @@ public class AlarmReceiver extends BroadcastReceiver {
                 return;
         }
 
-        int resetAlarmId = Math.abs((name + time + "_reset").hashCode());
+        int resetAlarmId = AlarmHelper.safeId(name + time + "_reset");
 
         Intent intent = new Intent(context, AlarmReceiver.class);
         intent.putExtra("MEDICINE_NAME", name);
@@ -462,7 +490,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         reset.setTimeInMillis(resetMillis);
 
-        int resetAlarmId = Math.abs((name + "_day" + customDay + "_" + time + "_reset").hashCode());
+        int resetAlarmId = AlarmHelper.safeId(name + "_day" + customDay + "_" + time + "_reset");
 
         Intent intent = new Intent(context, AlarmReceiver.class);
         intent.putExtra("MEDICINE_NAME", name);
