@@ -21,29 +21,25 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -304,21 +300,23 @@ private fun AlarmScreen(
     onStop: () -> Unit,
     onSnooze: () -> Unit,
 ) {
+    // Zemin ve metin, M3 rol çifti primaryContainer / onPrimaryContainer ile — bu çift her
+    // dinamik palette (açık/koyu duvar kağıdı) garantili kontrast verir. Eskiden zemin doygun
+    // "primary", metin ise sabit beyaz'dı; primary açık bir pastel olduğunda beyaz metin
+    // okunamıyordu. Bu yaklaşım "renkli/özel alarm" hissini korurken okunabilirliği garantiler.
+    val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary),
-                ),
-            ),
+            .background(MaterialTheme.colorScheme.primaryContainer),
     ) {
-        // Statik "nabız" dairesi — orijinal bg_circle_pulse.xml'in sadık taşıması (o da animasyonsuzdu)
+        // İnce tonal hale — büyük saatin arkasında hafif bir derinlik
         Box(
             modifier = Modifier
-                .size(200.dp)
+                .size(240.dp)
                 .align(Alignment.Center)
-                .background(Color.White.copy(alpha = 0.12f), CircleShape),
+                .background(onContainer.copy(alpha = 0.06f), CircleShape),
         )
 
         Column(
@@ -335,12 +333,12 @@ private fun AlarmScreen(
                 Icon(
                     painter = painterResource(R.drawable.ic_medicine_white),
                     contentDescription = "İlaç",
-                    tint = Color.Unspecified,
+                    tint = onContainer,
                     modifier = Modifier.size(72.dp),
                 )
                 Text(
                     text = "İLAÇ VAKTİ",
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = onContainer.copy(alpha = 0.7f),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 2.sp,
@@ -348,7 +346,7 @@ private fun AlarmScreen(
                 )
                 Text(
                     text = medicineName,
-                    color = Color.White,
+                    color = onContainer,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
@@ -356,15 +354,15 @@ private fun AlarmScreen(
                 )
                 Text(
                     text = formatTimeForDisplay(LocalContext.current, medicineTime),
-                    color = Color.White,
+                    color = onContainer,
                     fontSize = 72.sp,
-                    fontWeight = FontWeight.Light,
+                    fontWeight = FontWeight.Normal,
                     modifier = Modifier.padding(top = 16.dp),
                 )
                 if (!medicineNote.isNullOrEmpty()) {
                     Text(
                         text = "Not: $medicineNote",
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = onContainer.copy(alpha = 0.7f),
                         fontSize = 16.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 8.dp),
@@ -372,31 +370,27 @@ private fun AlarmScreen(
                 }
             }
 
+            // Asıl eylem: dolu M3 Button (primary) — renkli zeminde en güçlü çağrı.
             Button(
                 onClick = onStop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(bottom = 12.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                ),
+                    .height(64.dp),
             ) {
-                Text("✓  İlacı Aldım", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                Text("İlacı Aldım", fontSize = 18.sp, fontWeight = FontWeight.Medium)
             }
 
-            OutlinedButton(
+            Spacer(Modifier.height(12.dp))
+
+            // İkincil eylem: tonal M3 Button (secondaryContainer) — beyaz çerçeveli yerine
+            // paletle uyumlu, okunur bir ikincil buton.
+            FilledTonalButton(
                 onClick = onSnooze,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.5f)),
             ) {
-                Text("⏰  Ertele", fontSize = 16.sp)
+                Text("Ertele", fontSize = 16.sp)
             }
         }
     }
