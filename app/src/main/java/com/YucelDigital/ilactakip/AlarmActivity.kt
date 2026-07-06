@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -152,25 +154,59 @@ class AlarmActivity : AppCompatActivity() {
     }
 
     private fun playAlarmSound() {
-        try {
-            val soundUri = AlarmReceiver.resolveSoundUri(soundUriStr)
-            mediaPlayer = MediaPlayer()
-            mediaPlayer?.setDataSource(applicationContext, soundUri!!)
-            mediaPlayer?.setAudioAttributes(
+        val soundUri = AlarmReceiver.resolveSoundUri(soundUriStr)
+        if (!startPlayback(soundUri, isFallback = false)) {
+            // Seçilen/çözümlenen ses hiç kurulamadıysa (uri null, dosya silinmiş vb.)
+            // sessiz kalmak yerine sistemin varsayılan alarm sesine düş.
+            playDefaultAlarmSound()
+        }
+    }
+
+    private fun playDefaultAlarmSound() {
+        val fallbackUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        startPlayback(fallbackUri, isFallback = true)
+    }
+
+    /**
+     * Verilen sesle çalmayı dener. Kurulum senkron olarak başarısız olursa (setDataSource
+     * fırlatırsa) false döner ve çağıran taraf varsayılana düşebilir. Kurulum kabul edilip
+     * hazırlık asenkron olarak başarısız olursa (bozuk/silinmiş özel ses dosyası gibi),
+     * setOnErrorListener kendisi varsayılana düşer — bu yüzden fallback denemesinde
+     * (isFallback = true) sonsuz döngüye girmemek için hata dinleyicisi eklenmiyor.
+     */
+    private fun startPlayback(soundUri: Uri?, isFallback: Boolean): Boolean {
+        if (soundUri == null) return false
+        return try {
+            mediaPlayer?.release()
+            val player = MediaPlayer()
+            mediaPlayer = player
+            player.setDataSource(applicationContext, soundUri)
+            player.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build(),
             )
-            mediaPlayer?.isLooping = true // Ses tekrar tekrar çalar
+            player.isLooping = true // Ses tekrar tekrar çalar
             // prepare() ana thread'i bloklar (özellikle content:// URI'lerde ANR riski);
             // prepareAsync() + listener kullanılıyor.
-            mediaPlayer?.setOnPreparedListener { mp -> mp.start() }
-            mediaPlayer?.prepareAsync()
+            player.setOnPreparedListener { mp -> mp.start() }
+            if (!isFallback) {
+                player.setOnErrorListener { mp, _, _ ->
+                    mp.release()
+                    if (mediaPlayer === mp) mediaPlayer = null
+                    playDefaultAlarmSound()
+                    true
+                }
+            }
+            player.prepareAsync()
+            true
         } catch (e: Exception) {
             e.printStackTrace()
             mediaPlayer?.release()
             mediaPlayer = null
+            false
         }
     }
 
