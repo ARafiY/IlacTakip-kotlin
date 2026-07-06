@@ -19,7 +19,14 @@
         <item name="android:colorBackground">@color/app_background</item>
         <item name="android:windowBackground">@color/app_background</item>
         <item name="android:textColor">@color/text_primary</item>
-        <item name="android:statusBarColor">@color/primary_variant</item>
-        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Edge-to-edge: sistem çubukları şeffaf. Çalışma zamanında enableEdgeToEdge()
+             zaten şeffaf yapıyor; bunlar sadece uygulama açılırkenki kısa launch penceresinde
+             beyaz/teal bir flaş görünmesin diye. İkon kontrastı (aydınlık/karanlık) da
+             enableEdgeToEdge() tarafından otomatik ayarlanıyor. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Aydınlık modda status bar ikonları koyu olsun (açık zemin üstünde okunaklı). -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

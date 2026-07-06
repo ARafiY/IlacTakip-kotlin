@@ -20,7 +20,11 @@
         <item name="android:colorBackground">@color/app_background</item>
         <item name="android:windowBackground">@color/app_background</item>
         <item name="android:textColor">@color/text_primary</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+
+        <!-- Edge-to-edge: sistem çubukları şeffaf (bkz. values/themes.xml açıklaması).
+             Karanlık modda status bar ikonları açık kalır. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
