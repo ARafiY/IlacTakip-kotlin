@@ -18,7 +18,6 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
@@ -38,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -73,8 +73,13 @@ class AlarmActivity : AppCompatActivity() {
     private var isCustomDay = false
     private var customDay = 0
 
+    // Erteleme onay mesajı (null = normal alarm ekranı gösterilir). Compose-gözlemli:
+    // ertelenince bu doldurulup ekranda bir onay pop-up'ı çıkıyor, sonra ekran kapanıyor.
+    private val snoozeConfirm = mutableStateOf<String?>(null)
+
     companion object {
         private const val ALARM_TIMEOUT_MS = 5 * 60 * 1000L // 5 dakika
+        private const val SNOOZE_CONFIRM_MS = 4000L // erteleme onayının ekranda kalma süresi
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -126,6 +131,7 @@ class AlarmActivity : AppCompatActivity() {
                     medicineName = medicineName ?: "İlaç Zamanı",
                     medicineTime = medicineTime ?: "",
                     medicineNote = medicineNote,
+                    snoozeMessage = snoozeConfirm.value,
                     onStop = {
                         timeoutHandler.removeCallbacksAndMessages(null)
                         stopAlarmSound()
@@ -139,12 +145,7 @@ class AlarmActivity : AppCompatActivity() {
         }
 
         // 5 dakika sonra otomatik ertele (kullanıcı cevap vermezse)
-        timeoutHandler.postDelayed({
-            stopAlarmSound()
-            clearNotification()
-            snoozeAlarm(5)
-            finish()
-        }, ALARM_TIMEOUT_MS)
+        timeoutHandler.postDelayed({ performSnooze(5) }, ALARM_TIMEOUT_MS)
     }
 
     private fun clearNotification() {
@@ -153,13 +154,23 @@ class AlarmActivity : AppCompatActivity() {
     }
 
     private fun handleRandomSnooze() {
-        timeoutHandler.removeCallbacksAndMessages(null)
-        stopAlarmSound()
         val possibleMinutes = intArrayOf(5, 10, 15, 20, 25, 30, 35, 40, 45)
         val randomMinute = possibleMinutes[Random().nextInt(possibleMinutes.size)]
+        performSnooze(randomMinute)
+    }
+
+    /**
+     * Ertele: sesi durdur, bildirimi kapat, alarmı yeniden kur; sonra ekranda bir onay
+     * pop-up'ı gösterip (SNOOZE_CONFIRM_MS) ekranı kapat. Onay Toast'tan farklı olarak
+     * süresini biz kontrol ediyoruz.
+     */
+    private fun performSnooze(minutes: Int) {
+        timeoutHandler.removeCallbacksAndMessages(null)
+        stopAlarmSound()
         clearNotification()
-        snoozeAlarm(randomMinute)
-        finish()
+        snoozeAlarm(minutes)
+        snoozeConfirm.value = "$minutes dakika sonra tekrar hatırlatılacak"
+        timeoutHandler.postDelayed({ finish() }, SNOOZE_CONFIRM_MS)
     }
 
     private fun markAsTaken() {
@@ -266,7 +277,7 @@ class AlarmActivity : AppCompatActivity() {
         } else {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
         }
-        Toast.makeText(this, "$minutes dakika ertelendi", Toast.LENGTH_SHORT).show()
+        // Onay artık ekran içi pop-up ile gösteriliyor (bkz. performSnooze), Toast kaldırıldı.
     }
 
     override fun onDestroy() {
@@ -297,6 +308,7 @@ private fun AlarmScreen(
     medicineName: String,
     medicineTime: String,
     medicineNote: String?,
+    snoozeMessage: String?,
     onStop: () -> Unit,
     onSnooze: () -> Unit,
 ) {
@@ -318,6 +330,32 @@ private fun AlarmScreen(
                 .align(Alignment.Center)
                 .background(onContainer.copy(alpha = 0.06f), CircleShape),
         )
+
+        if (snoozeMessage != null) {
+            // Erteleme onayı — ekran kapanmadan önce SNOOZE_CONFIRM_MS boyunca gösterilir.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = "Ertelendi",
+                    color = onContainer,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = snoozeMessage,
+                    color = onContainer.copy(alpha = 0.8f),
+                    fontSize = 17.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            }
+            return@Box
+        }
 
         Column(
             modifier = Modifier
