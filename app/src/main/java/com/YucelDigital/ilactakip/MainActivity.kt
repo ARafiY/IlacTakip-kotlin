@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
     private fun scheduleStandardAlarm(medicine: Medicine) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
-        val timeArray = medicine.time.split(", ")
+        val timeArray = medicine.time!!.split(", ")
 
         for (rawTime in timeArray) {
             val singleTime = rawTime.trim()
@@ -595,8 +595,9 @@ private fun MedicineCard(
         indicatorColor = colorResource(R.color.indicator_expired)
     }
 
-    val timeText = if (medicine.isUseCustomDays && medicine.customDayTimes != null) {
-        formatCustomDayTimes(medicine.customDayTimes)
+    val customDayTimes = medicine.customDayTimes
+    val timeText = if (medicine.isUseCustomDays && customDayTimes != null) {
+        formatCustomDayTimes(customDayTimes)
     } else {
         medicine.time ?: ""
     }
