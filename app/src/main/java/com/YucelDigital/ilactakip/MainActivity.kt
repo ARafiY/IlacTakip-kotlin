@@ -496,11 +496,14 @@ private fun Header() {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val background = MaterialTheme.colorScheme.background
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(primary, secondary)))
+            // Son durak arka plan rengi: header'ın altındaki sayfayla sert bir kesim
+            // yerine yumuşak bir geçişle "eriyerek" birleşmesi için.
+            .background(Brush.verticalGradient(listOf(primary, secondary, background)))
             .padding(horizontal = 24.dp)
             .padding(top = 48.dp, bottom = 24.dp),
     ) {
@@ -608,7 +611,10 @@ private fun MedicineCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        // containerColor'ı elle vermiyoruz: M3'ün varsayılanı (surfaceContainerLow) arka
+        // plandan otomatik olarak biraz daha açık/koyu bir ton alıp kartı "yükseltir" —
+        // biz burada surface'e sabitleyince koyu modda arka planla neredeyse aynı renk
+        // olduğu için kart görünmez oluyordu.
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {

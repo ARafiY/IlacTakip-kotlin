@@ -450,9 +450,15 @@ private fun AddMedicineScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Son durak arka plan rengi: header'ın altındaki sayfayla sert bir
+                    // kesim yerine yumuşak bir geçişle "eriyerek" birleşmesi için.
                     .background(
                         Brush.verticalGradient(
-                            listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary),
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.secondary,
+                                MaterialTheme.colorScheme.background,
+                            ),
                         ),
                     )
                     .padding(horizontal = 20.dp)
@@ -645,7 +651,9 @@ private fun AddMedicineScreen(
                         .fillMaxWidth()
                         .height(56.dp)
                         .padding(top = 8.dp, bottom = 24.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    // Şekli elle vermiyoruz: M3'ün varsayılan (hap/stadium) buton şekli
+                    // aşağıdaki OutlinedButton'larla ve segmented button'la aynı — böylece
+                    // ekrandaki tüm butonlar tutarlı, tasarlanmış bir aile gibi görünüyor.
                 ) {
                     Text(
                         text = if (isEditMode) "Güncelle" else "İlacı Kaydet",
@@ -761,7 +769,8 @@ private fun FormCard(title: String, content: @Composable ColumnScope.() -> Unit)
             .fillMaxWidth()
             .padding(bottom = 16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        // containerColor'ı elle vermiyoruz — bkz. MainActivity.MedicineCard'daki aynı yorum:
+        // M3 varsayılanı (surfaceContainerLow) arka plandan otomatik ayrışan bir ton veriyor.
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
