@@ -44,12 +44,12 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -455,14 +455,14 @@ private fun MainScreen(
     onTakenChanged: (Medicine, Boolean) -> Unit,
     onDeleteConfirmed: (Medicine) -> Unit,
 ) {
-    // Büyük başlık, aşağı kaydırınca yumuşakça küçük bir çubuğa çöker — Google'ın kendi
-    // uygulamalarındaki (Saat, Ayarlar) native M3 davranışı.
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    // Kompakt, tepede sabit başlık. pinnedScrollBehavior: içerik çubuğun altından
+    // kayınca çubuk yerinde kalır ama M3'ün ince "yükseltilmiş" renk tonunu alır.
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = { Text("İlaç Takip") },
                 scrollBehavior = scrollBehavior,
             )
