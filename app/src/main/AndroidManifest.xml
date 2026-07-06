@@ -23,7 +23,7 @@
         <activity
             android:name=".AddMedicineActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustPan" />
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".MainActivity"

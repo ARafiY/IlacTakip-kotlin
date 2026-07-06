@@ -13,6 +13,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +26,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -441,26 +449,38 @@ private fun AddMedicineScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (isEditMode) "İlacı Düzenle" else "Yeni İlaç Ekle") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_add),
-                            contentDescription = "Kapat",
-                            // 45° döndürülmüş "+" ikonu bir "×" (kapat) simgesi veriyor —
-                            // ayrı bir kapat vektörü eklemeye gerek kalmıyor.
-                            modifier = Modifier.rotate(45f),
-                        )
-                    }
-                },
-            )
+            // Klavye açılınca üst çubuğu gizle, kapanınca geri getir — yazarken içeriğe yer
+            // açan, Google'ın form ekranlarındaki gibi bir davranış. (Klavye açıkken kapat
+            // ikonu gizlenir; ekrandan çıkmak için sistem geri hareketi/tuşu kullanılır.)
+            AnimatedVisibility(
+                visible = !WindowInsets.isImeVisible,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                TopAppBar(
+                    title = { Text(if (isEditMode) "İlacı Düzenle" else "Yeni İlaç Ekle") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_add),
+                                contentDescription = "Kapat",
+                                // 45° döndürülmüş "+" ikonu bir "×" (kapat) simgesi veriyor —
+                                // ayrı bir kapat vektörü eklemeye gerek kalmıyor.
+                                modifier = Modifier.rotate(45f),
+                            )
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // Klavye açıkken kaydırma alanını klavye kadar içeri al: odaklı alan
+                // klavyenin üstüne kaydırılıp görünür kalır (adjustResize ile birlikte).
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
