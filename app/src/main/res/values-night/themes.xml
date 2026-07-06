@@ -1,13 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.IlacTakip" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.IlacTakip" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryVariant">@color/primary_variant</item>
         <item name="colorOnPrimary">@color/text_on_primary</item>
+        <item name="colorPrimaryContainer">@color/primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/text_primary</item>
+
         <item name="colorSecondary">@color/secondary</item>
-        <item name="colorSecondaryVariant">@color/secondary</item>
         <item name="colorOnSecondary">@color/black</item>
 
+        <item name="colorSurface">@color/surface_color</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/card_background</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/white</item>
+
+        <item name="android:colorBackground">@color/app_background</item>
         <item name="android:windowBackground">@color/app_background</item>
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:statusBarColor">@color/primary_dark</item>
