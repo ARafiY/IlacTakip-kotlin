@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -549,6 +550,7 @@ private fun MedicineCard(
     onDelete: () -> Unit,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val isExpired = remember(medicine.endDate) {
         val endDate = medicine.endDate
@@ -590,9 +592,9 @@ private fun MedicineCard(
 
     val customDayTimes = medicine.customDayTimes
     val timeText = if (medicine.isUseCustomDays && customDayTimes != null) {
-        formatCustomDayTimes(customDayTimes)
+        formatCustomDayTimes(context, customDayTimes)
     } else {
-        medicine.time ?: ""
+        formatTimesForDisplay(context, medicine.time ?: "")
     }
     val dateRange = medicine.dateRange
     val note = medicine.note
@@ -733,8 +735,8 @@ private fun MedicineCard(
     }
 }
 
-/** HashMap<calDay, times> → "Pzt 09:00, Sal 10:30" formatına dönüştür */
-private fun formatCustomDayTimes(dayTimes: Map<Int, String>): String {
+/** HashMap<calDay, times> → "Pzt 09:00, Sal 10:30" formatına dönüştür (saatler cihaz formatında) */
+private fun formatCustomDayTimes(context: Context, dayTimes: Map<Int, String>): String {
     val shortNames = arrayOf("", "Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt")
     val ordered = intArrayOf(2, 3, 4, 5, 6, 7, 1) // Pzt-Paz sırası
 
@@ -743,7 +745,7 @@ private fun formatCustomDayTimes(dayTimes: Map<Int, String>): String {
         val times = dayTimes[day] ?: continue
         val firstTime = if (times.contains(",")) times.split(",")[0].trim() else times
         if (sb.isNotEmpty()) sb.append(", ")
-        sb.append(shortNames[day]).append(" ").append(firstTime)
+        sb.append(shortNames[day]).append(" ").append(formatTimeForDisplay(context, firstTime))
     }
     return sb.toString()
 }

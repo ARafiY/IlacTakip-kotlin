@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Bundle
+import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -505,7 +506,7 @@ private fun AddMedicineScreen(
                         val timePickerState = rememberTimePickerState(
                             initialHour = state.hour,
                             initialMinute = state.minute,
-                            is24Hour = true,
+                            is24Hour = DateFormat.is24HourFormat(context),
                         )
                         LaunchedEffect(timePickerState.hour, timePickerState.minute) {
                             state.hour = timePickerState.hour
@@ -558,7 +559,7 @@ private fun AddMedicineScreen(
                                     ) {
                                         Text(DAY_NAMES[day], modifier = Modifier.weight(1f), fontSize = 16.sp)
                                         Text(
-                                            time,
+                                            formatTimeForDisplay(context, time),
                                             color = MaterialTheme.colorScheme.primary,
                                             fontSize = 16.sp,
                                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -665,7 +666,7 @@ private fun AddMedicineScreen(
         val dayPickerState = rememberTimePickerState(
             initialHour = initHour,
             initialMinute = initMinute,
-            is24Hour = true,
+            is24Hour = DateFormat.is24HourFormat(context),
         )
         AlertDialog(
             onDismissRequest = { state.dayTimeDialogFor = null },

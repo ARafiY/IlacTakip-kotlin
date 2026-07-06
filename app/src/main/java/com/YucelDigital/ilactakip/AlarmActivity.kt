@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -354,7 +355,7 @@ private fun AlarmScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
                 Text(
-                    text = medicineTime,
+                    text = formatTimeForDisplay(LocalContext.current, medicineTime),
                     color = Color.White,
                     fontSize = 72.sp,
                     fontWeight = FontWeight.Light,
