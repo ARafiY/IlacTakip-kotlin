@@ -18,10 +18,38 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.WindowManager
-import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.button.MaterialButton
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.YucelDigital.ilactakip.ui.theme.IlacTakipTheme
 import java.util.Calendar
 import java.util.Random
 
@@ -36,12 +64,6 @@ class AlarmActivity : AppCompatActivity() {
             }
         }
     }
-
-    private var nameText: TextView? = null
-    private var timeText: TextView? = null
-    private var noteText: TextView? = null
-    private var stopButton: MaterialButton? = null
-    private var snoozeButton: MaterialButton? = null
 
     private var medicineName: String? = null
     private var medicineTime: String? = null
@@ -60,7 +82,6 @@ class AlarmActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_alarm)
 
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -99,31 +120,26 @@ class AlarmActivity : AppCompatActivity() {
         isCustomDay = intent.getBooleanExtra("IS_CUSTOM_DAY", false)
         customDay = intent.getIntExtra("CUSTOM_DAY", 0)
 
-        // View'ları Bağla
-        nameText = findViewById(R.id.medicineNameTextView)
-        timeText = findViewById(R.id.timeTextView)
-        noteText = findViewById(R.id.noteTextView)
-        stopButton = findViewById(R.id.stopButton)
-        snoozeButton = findViewById(R.id.snoozeButton)
-
-        nameText?.text = medicineName ?: "İlaç Zamanı"
-        timeText?.text = medicineTime
-        noteText?.text = if (!medicineNote.isNullOrEmpty()) "Not: $medicineNote" else ""
-
         // Özel Sesi Başlat
         playAlarmSound()
 
-        // DURDUR
-        stopButton?.setOnClickListener {
-            timeoutHandler.removeCallbacksAndMessages(null)
-            stopAlarmSound()
-            clearNotification()
-            markAsTaken()
-            finish()
+        setContent {
+            IlacTakipTheme {
+                AlarmScreen(
+                    medicineName = medicineName ?: "İlaç Zamanı",
+                    medicineTime = medicineTime ?: "",
+                    medicineNote = medicineNote,
+                    onStop = {
+                        timeoutHandler.removeCallbacksAndMessages(null)
+                        stopAlarmSound()
+                        clearNotification()
+                        markAsTaken()
+                        finish()
+                    },
+                    onSnooze = { handleRandomSnooze() },
+                )
+            }
         }
-
-        // ERTELE — Rastgele Süre
-        snoozeButton?.setOnClickListener { handleRandomSnooze() }
 
         // 5 dakika sonra otomatik ertele (kullanıcı cevap vermezse)
         timeoutHandler.postDelayed({
@@ -276,5 +292,111 @@ class AlarmActivity : AppCompatActivity() {
             return true
         }
         return super.onKeyDown(keyCode, event)
+    }
+}
+
+@Composable
+private fun AlarmScreen(
+    medicineName: String,
+    medicineTime: String,
+    medicineNote: String?,
+    onStop: () -> Unit,
+    onSnooze: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary),
+                ),
+            ),
+    ) {
+        // Statik "nabız" dairesi — orijinal bg_circle_pulse.xml'in sadık taşıması (o da animasyonsuzdu)
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .align(Alignment.Center)
+                .background(Color.White.copy(alpha = 0.12f), CircleShape),
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_medicine_white),
+                    contentDescription = "İlaç",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(72.dp),
+                )
+                Text(
+                    text = "İLAÇ VAKTİ",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                Text(
+                    text = medicineName,
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    text = medicineTime,
+                    color = Color.White,
+                    fontSize = 72.sp,
+                    fontWeight = FontWeight.Light,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                if (!medicineNote.isNullOrEmpty()) {
+                    Text(
+                        text = "Not: $medicineNote",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+
+            Button(
+                onClick = onStop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ),
+            ) {
+                Text("✓  İlacı Aldım", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            }
+
+            OutlinedButton(
+                onClick = onSnooze,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.5f)),
+            ) {
+                Text("⏰  Ertele", fontSize = 16.sp)
+            }
+        }
     }
 }
