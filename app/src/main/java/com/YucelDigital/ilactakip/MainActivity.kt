@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -40,13 +41,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -55,8 +59,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -103,6 +107,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         loadData()
 
@@ -440,6 +445,7 @@ class MainActivity : AppCompatActivity() {
 //  COMPOSE UI
 // ══════════════════════════════════════════════════════════════
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScreen(
     medicines: List<Medicine>,
@@ -449,76 +455,52 @@ private fun MainScreen(
     onTakenChanged: (Medicine, Boolean) -> Unit,
     onDeleteConfirmed: (Medicine) -> Unit,
 ) {
+    // Büyük başlık, aşağı kaydırınca yumuşakça küçük bir çubuğa çöker — Google'ın kendi
+    // uygulamalarındaki (Saat, Ayarlar) native M3 davranışı.
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = { Text("İlaç Takip") },
+                scrollBehavior = scrollBehavior,
+            )
+        },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddClick,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
+            FloatingActionButton(onClick = onAddClick) {
                 Icon(painterResource(R.drawable.ic_add), contentDescription = "Yeni İlaç Ekle")
             }
         },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            Header()
-
-            if (medicines.isEmpty()) {
-                EmptyState(modifier = Modifier.weight(1f))
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    itemsIndexed(medicines) { index, medicine ->
-                        MedicineCard(
-                            medicine = medicine,
-                            onClick = { onEditClick(medicine, index) },
-                            onActiveChanged = { onActiveChanged(medicine, it) },
-                            onTakenChanged = { onTakenChanged(medicine, it) },
-                            onDelete = { onDeleteConfirmed(medicine) },
-                        )
-                    }
+    ) { innerPadding ->
+        if (medicines.isEmpty()) {
+            EmptyState(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = innerPadding.calculateTopPadding() + 8.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 96.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(medicines) { index, medicine ->
+                    MedicineCard(
+                        medicine = medicine,
+                        onClick = { onEditClick(medicine, index) },
+                        onActiveChanged = { onActiveChanged(medicine, it) },
+                        onTakenChanged = { onTakenChanged(medicine, it) },
+                        onDelete = { onDeleteConfirmed(medicine) },
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun Header() {
-    val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-    val onPrimary = MaterialTheme.colorScheme.onPrimary
-    val background = MaterialTheme.colorScheme.background
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Son durak arka plan rengi: header'ın altındaki sayfayla sert bir kesim
-            // yerine yumuşak bir geçişle "eriyerek" birleşmesi için.
-            .background(Brush.verticalGradient(listOf(primary, secondary, background)))
-            .padding(horizontal = 24.dp)
-            .padding(top = 48.dp, bottom = 24.dp),
-    ) {
-        Text(
-            text = "💊 İlaç Takip",
-            color = onPrimary,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Sağlığınız bizim önceliğimiz",
-            color = onPrimary.copy(alpha = 0.7f),
-            fontSize = 14.sp,
-        )
     }
 }
 

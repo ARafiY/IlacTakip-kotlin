@@ -9,9 +9,9 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -68,8 +69,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +88,7 @@ class AddMedicineActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         val editingMedicine = intent.getSerializableExtra("edit_medicine") as? Medicine
         isEditMode = editingMedicine != null
@@ -438,51 +438,32 @@ private fun AddMedicineScreen(
         }
     }
 
-    Scaffold { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (isEditMode) "İlacı Düzenle" else "Yeni İlaç Ekle") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_add),
+                            contentDescription = "Kapat",
+                            // 45° döndürülmüş "+" ikonu bir "×" (kapat) simgesi veriyor —
+                            // ayrı bir kapat vektörü eklemeye gerek kalmıyor.
+                            modifier = Modifier.rotate(45f),
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
         ) {
-            // Header
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Son durak arka plan rengi: header'ın altındaki sayfayla sert bir
-                    // kesim yerine yumuşak bir geçişle "eriyerek" birleşmesi için.
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary,
-                                MaterialTheme.colorScheme.background,
-                            ),
-                        ),
-                    )
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 40.dp, bottom = 24.dp),
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_add),
-                        contentDescription = "Geri",
-                        tint = Color.White,
-                        modifier = Modifier.rotate(45f),
-                    )
-                }
-                Text(
-                    text = if (isEditMode) "İlacı Düzenle" else "Yeni İlaç Ekle",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
-
-            Column(modifier = Modifier.padding(20.dp)) {
-                FormCard(title = "💊 İlaç Bilgileri") {
+            FormCard(title = "💊 İlaç Bilgileri") {
                     OutlinedTextField(
                         value = state.name,
                         onValueChange = {
@@ -649,8 +630,13 @@ private fun AddMedicineScreen(
                     onClick = onSave,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(top = 8.dp, bottom = 24.dp),
+                        // padding'i height'tan ÖNCE veriyoruz: aksi halde height(56dp) önce
+                        // uygulanıp toplam yüksekliği 56dp'ye sabitliyor, sonra padding onun
+                        // içinden ~32dp yiyor ve butona metin için sadece ~24dp kalıyordu
+                        // (yazı dikey kırpılıyordu). Bu sırada padding dış boşluk (margin),
+                        // height ise butonun kendi yüksekliği olur.
+                        .padding(top = 8.dp, bottom = 24.dp)
+                        .height(56.dp),
                     // Şekli elle vermiyoruz: M3'ün varsayılan (hap/stadium) buton şekli
                     // aşağıdaki OutlinedButton'larla ve segmented button'la aynı — böylece
                     // ekrandaki tüm butonlar tutarlı, tasarlanmış bir aile gibi görünüyor.
@@ -661,7 +647,6 @@ private fun AddMedicineScreen(
                         fontWeight = FontWeight.Medium,
                     )
                 }
-            }
         }
     }
 
