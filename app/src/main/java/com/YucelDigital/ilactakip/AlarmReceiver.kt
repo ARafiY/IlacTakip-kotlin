@@ -466,7 +466,7 @@ class AlarmReceiver : BroadcastReceiver() {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_medicine)
+            .setSmallIcon(R.drawable.ic_pill)
             .setContentTitle("İlaç Vakti: $name")
             .setContentText("$time — İlacınızı almayı unutmayın.")
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -476,7 +476,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setVibrate(longArrayOf(0, 500, 200, 500))
             .setFullScreenIntent(fullScreenPI, true)
-            .addAction(R.drawable.ic_medicine_white, "✓ İlaç Aldım", takenPI)
+            .addAction(R.drawable.ic_pill, "✓ İlaç Aldım", takenPI)
             .addAction(R.drawable.ic_note, "⏰ Ertele", snoozePI)
 
         // Bildirime KASITLI OLARAK ses eklenmiyor (builder.setSound(...) çağırmayın).
