@@ -331,7 +331,7 @@ private fun AlarmScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_medicine_white),
+                    painter = painterResource(R.drawable.ic_pill),
                     contentDescription = "İlaç",
                     tint = onContainer,
                     modifier = Modifier.size(72.dp),
