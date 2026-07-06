@@ -18,8 +18,8 @@ import com.YucelDigital.ilactakip.R
  * Daha eski cihazlarda veya dynamicColor=false verilirse, aşağıdaki sabit palete düşülür.
  * Sabit palet res/values/colors.xml + res/values-night/colors.xml üzerinden colorResource()
  * ile okunuyor — gece/gündüz varyantı Android kaynak sistemi tarafından otomatik seçiliyor,
- * bu yüzden burada hex değer tekrarlanmıyor. XML tabanlı ekranlarla (AddMedicineActivity,
- * AlarmActivity) aynı paleti paylaşır.
+ * bu yüzden burada hex değer tekrarlanmıyor. Üç Compose ekranının (MainActivity,
+ * AddMedicineActivity, AlarmActivity) hepsi bu tema fonksiyonunu kullanır.
  */
 @Composable
 fun IlacTakipTheme(
