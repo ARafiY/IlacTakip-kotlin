@@ -323,14 +323,6 @@ private fun AlarmScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.primaryContainer),
     ) {
-        // İnce tonal hale — büyük saatin arkasında hafif bir derinlik
-        Box(
-            modifier = Modifier
-                .size(240.dp)
-                .align(Alignment.Center)
-                .background(onContainer.copy(alpha = 0.06f), CircleShape),
-        )
-
         if (snoozeMessage != null) {
             // Erteleme onayı — ekran kapanmadan önce SNOOZE_CONFIRM_MS boyunca gösterilir.
             Column(
@@ -340,11 +332,26 @@ private fun AlarmScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
+                // Tonal rozet: saat ikonuyla belirgin, düzgün boyutlu bir daire
+                Box(
+                    modifier = Modifier
+                        .size(116.dp)
+                        .background(onContainer.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_clock),
+                        contentDescription = null,
+                        tint = onContainer,
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
                 Text(
                     text = "Ertelendi",
                     color = onContainer,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 24.dp),
                 )
                 Text(
                     text = snoozeMessage,
@@ -356,6 +363,14 @@ private fun AlarmScreen(
             }
             return@Box
         }
+
+        // İnce tonal hale — büyük saatin arkasında hafif bir derinlik
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .align(Alignment.Center)
+                .background(onContainer.copy(alpha = 0.06f), CircleShape),
+        )
 
         Column(
             modifier = Modifier
