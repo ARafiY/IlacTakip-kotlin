@@ -125,19 +125,27 @@ class MainActivity : AppCompatActivity() {
                         launcher.launch(intent)
                     },
                     onActiveChanged = { medicine, isChecked ->
-                        medicine.isActive = isChecked
-                        if (!isChecked) {
-                            cancelAlarm(medicine)
-                            Toast.makeText(this, "Alarm pasif edildi", Toast.LENGTH_SHORT).show()
-                        } else {
-                            scheduleAlarm(medicine)
-                            Toast.makeText(this, "Alarm aktif edildi", Toast.LENGTH_SHORT).show()
+                        val index = medicineList.indexOf(medicine)
+                        if (index >= 0) {
+                            // Yerinde mutasyon yerine güncellenmiş klonla değiştir → yeniden çizim.
+                            val updated = medicine.copy().apply { isActive = isChecked }
+                            if (!isChecked) {
+                                cancelAlarm(updated)
+                                Toast.makeText(this, "Alarm pasif edildi", Toast.LENGTH_SHORT).show()
+                            } else {
+                                scheduleAlarm(updated)
+                                Toast.makeText(this, "Alarm aktif edildi", Toast.LENGTH_SHORT).show()
+                            }
+                            medicineList[index] = updated
+                            saveData()
                         }
-                        saveData()
                     },
                     onTakenChanged = { medicine, isChecked ->
-                        medicine.isTaken = isChecked
-                        saveData()
+                        val index = medicineList.indexOf(medicine)
+                        if (index >= 0) {
+                            medicineList[index] = medicine.copy().apply { isTaken = isChecked }
+                            saveData()
+                        }
                     },
                     onDeleteConfirmed = { medicine ->
                         cancelAlarm(medicine)

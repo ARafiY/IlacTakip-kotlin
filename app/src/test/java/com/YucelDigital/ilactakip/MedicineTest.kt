@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -374,5 +375,73 @@ class MedicineTest {
         val mainId = (name + time).hashCode()
         val resetId = (name + time + "_reset").hashCode()
         assertNotEquals(mainId, resetId)
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  copy() — Compose'da yeniden çizim için kullanılan klon
+    // ══════════════════════════════════════════════════════════════
+
+    @Test
+    fun copy_producesDistinctInstance() {
+        val copy = medicine.copy()
+        assertNotSame(medicine, copy)
+    }
+
+    @Test
+    fun copy_copiesAllScalarFields() {
+        medicine.isActive = false
+        medicine.isTaken = true
+        medicine.startDate = 1000L
+        medicine.endDate = 2000L
+        medicine.intervalDays = 3
+        medicine.soundUri = "content://alarm/1"
+        medicine.isUseCustomDays = true
+
+        val copy = medicine.copy()
+
+        assertEquals(medicine.name, copy.name)
+        assertEquals(medicine.time, copy.time)
+        assertEquals(medicine.dateRange, copy.dateRange)
+        assertEquals(medicine.note, copy.note)
+        assertEquals(medicine.isActive, copy.isActive)
+        assertEquals(medicine.isTaken, copy.isTaken)
+        assertEquals(medicine.startDate, copy.startDate)
+        assertEquals(medicine.endDate, copy.endDate)
+        assertEquals(medicine.intervalDays, copy.intervalDays)
+        assertEquals(medicine.soundUri, copy.soundUri)
+        assertEquals(medicine.isUseCustomDays, copy.isUseCustomDays)
+    }
+
+    @Test
+    fun copy_customDayTimes_isDeepCopied() {
+        val dayTimes = HashMap<Int, String>()
+        dayTimes[Calendar.MONDAY] = "09:00"
+        medicine.customDayTimes = dayTimes
+
+        val copy = medicine.copy()
+
+        // İçerik aynı ama harita farklı bir örnek (birini değiştirmek diğerini etkilemesin)
+        assertNotSame(medicine.customDayTimes, copy.customDayTimes)
+        assertEquals("09:00", copy.customDayTimes!![Calendar.MONDAY])
+
+        copy.customDayTimes!![Calendar.TUESDAY] = "10:00"
+        assertFalse(medicine.customDayTimes!!.containsKey(Calendar.TUESDAY))
+    }
+
+    @Test
+    fun copy_nullCustomDayTimes_staysNull() {
+        assertNull(medicine.customDayTimes)
+        assertNull(medicine.copy().customDayTimes)
+    }
+
+    @Test
+    fun copy_thenMutate_doesNotAffectOriginal() {
+        val original = Medicine("Parol", "08:00", "", "")
+        original.isTaken = false
+
+        val updated = original.copy().apply { isTaken = true }
+
+        assertTrue(updated.isTaken)
+        assertFalse("Klonu değiştirmek orijinali etkilememeli", original.isTaken)
     }
 }
