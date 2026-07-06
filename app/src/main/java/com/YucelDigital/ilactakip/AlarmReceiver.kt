@@ -476,8 +476,10 @@ class AlarmReceiver : BroadcastReceiver() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setVibrate(longArrayOf(0, 500, 200, 500))
             .setFullScreenIntent(fullScreenPI, true)
-            .addAction(R.drawable.ic_pill, "✓ İlaç Aldım", takenPI)
-            .addAction(R.drawable.ic_note, "⏰ Ertele", snoozePI)
+            // Not: Android 12+ bildirimlerinde aksiyon butonları sadece metin olarak çizilir
+            // (drawable ikon gösterilmez), bu yüzden metne emoji koymuyoruz — düz M3 etiket.
+            .addAction(R.drawable.ic_pill, "İlaç Aldım", takenPI)
+            .addAction(R.drawable.ic_note, "Ertele", snoozePI)
 
         // Bildirime KASITLI OLARAK ses eklenmiyor (builder.setSound(...) çağırmayın).
         // androidx.core.app.NotificationCompatBuilder, channelId'li bir builder'da API 26+
