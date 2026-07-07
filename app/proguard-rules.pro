@@ -12,23 +12,40 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Preserve line number information so release crash traces stay readable,
+# and hide the original source file name.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
-# ── Gson & Medicine model koruma ──
-# Gson reflection ile çalışır, model sınıflarının field'ları korunmalı
--keep class com.YucelDigital.ilactakip.Medicine { *; }
--keep class com.YucelDigital.ilactakip.Medicine$* { *; }
-
-# Gson TypeToken desteği
--keep class com.YucelDigital.ilactakip.MedicineRepository { *; }
+# ──────────────────────────────────────────────────────────────
+#  Gson
+# ──────────────────────────────────────────────────────────────
+# Gson relies on generic type information and annotations at runtime.
 -keepattributes Signature
 -keepattributes *Annotation*
--keep class com.google.gson.** { *; }
--keep class com.google.gson.reflect.TypeToken { *; }
--keep class * extends com.google.gson.reflect.TypeToken
+-dontwarn sun.misc.**
+
+# Keep @SerializedName-annotated fields so R8 does not leave them null.
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Keep TypeAdapter / factory / (de)serializer implementations used via @JsonAdapter.
+-keep class * extends com.google.gson.TypeAdapter
+-keep class * implements com.google.gson.TypeAdapterFactory
+-keep class * implements com.google.gson.JsonSerializer
+-keep class * implements com.google.gson.JsonDeserializer
+
+# Retain generic signatures of TypeToken and its (anonymous) subclasses (R8 3.0+).
+# MedicineRepository builds an anonymous TypeToken<ArrayList<Medicine>>.
+-keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
+
+# ──────────────────────────────────────────────────────────────
+#  App model
+# ──────────────────────────────────────────────────────────────
+# Medicine is (de)serialized both by Gson (field names become JSON keys) and by
+# Java serialization when passed through Intent extras (getSerializableExtra).
+# Both mechanisms use reflection over field names, so keep the class and members.
+-keep class com.YucelDigital.ilactakip.Medicine { *; }
+-keep class com.YucelDigital.ilactakip.Medicine$* { *; }
