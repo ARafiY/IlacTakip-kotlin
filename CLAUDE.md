@@ -14,8 +14,9 @@ bağlayıcı talimatlar içerir. Kod değişikliğine başlamadan önce oku.
   Değilse: `git checkout develop`
 - Yeni bir iş için `develop`'tan konu dalı aç (`git checkout -b feature/...`)
   ve işi bitince PR'ı **`develop`'a** (main'e değil) hedefle.
-- `main`'e merge yalnızca sürüm çıkarılırken ve insan onayıyla yapılır.
-- Kullanıcı açıkça istemedikçe commit/push yapma.
+- **`main`'e doğrudan commit/push YOK.** `develop`'tan `main`'e geçiş yalnızca
+  **Pull Request** ile ve insan onayıyla yapılır (sürüm çıkışlarında).
+- Kullanıcı açıkça istemedikçe commit/push/PR yapma.
 
 ## Proje hakkında
 
