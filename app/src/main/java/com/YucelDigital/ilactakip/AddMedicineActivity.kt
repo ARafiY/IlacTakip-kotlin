@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,13 +47,13 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -81,14 +82,17 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import com.YucelDigital.ilactakip.ui.theme.IlacTakipTheme
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 class AddMedicineActivity : AppCompatActivity() {
 
@@ -99,6 +103,7 @@ class AddMedicineActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        @Suppress("DEPRECATION")
         val editingMedicine = intent.getSerializableExtra("edit_medicine") as? Medicine
         isEditMode = editingMedicine != null
         editPosition = intent.getIntExtra("edit_position", -1)
@@ -130,13 +135,6 @@ class AddMedicineActivity : AppCompatActivity() {
             return
         }
 
-        // Aynı isimde ilaç kontrolü
-        if (isDuplicateName(name)) {
-            state.nameError = "Bu isimde bir ilaç zaten mevcut"
-            Toast.makeText(this, "Aynı isimde ilaç eklenemez", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         val med = if (state.isCustomDayMode) {
             saveCustomDayAlarm(state, name, note)
         } else {
@@ -144,10 +142,16 @@ class AddMedicineActivity : AppCompatActivity() {
         } ?: return // Validasyon hatası
 
         med.soundUri = state.soundUri
+        med.mealTiming = state.mealTiming
+        med.stockCount = state.stockText.trim().toIntOrNull()
 
         if (isEditMode) {
+            @Suppress("DEPRECATION")
             val oldMedicine = intent.getSerializableExtra("edit_medicine") as? Medicine
-            if (oldMedicine != null) med.isTaken = oldMedicine.isTaken
+            if (oldMedicine != null) {
+                med.id = oldMedicine.id
+                med.isTaken = oldMedicine.isTaken
+            }
         }
 
         val resultIntent = Intent()
@@ -159,7 +163,7 @@ class AddMedicineActivity : AppCompatActivity() {
         finish()
     }
 
-    /** Standart mod kaydetme (mevcut mantık) */
+    /** Standart mod kaydetme */
     private fun saveStandardAlarm(state: AddMedicineFormState, name: String, note: String): Medicine {
         val hour = state.hour
         val minute = state.minute
@@ -212,7 +216,6 @@ class AddMedicineActivity : AppCompatActivity() {
             return null
         }
 
-        // Frekans hesapla
         var freqCount = 1
         when (state.customFreqText) {
             "6 Saatte Bir" -> freqCount = 4
@@ -220,7 +223,6 @@ class AddMedicineActivity : AppCompatActivity() {
             "12 Saatte Bir" -> freqCount = 2
         }
 
-        // Her gün için frekansa göre zaman listesi oluştur
         val expandedDayTimes = HashMap<Int, String>()
         for ((day, baseTime) in state.customDayTimes) {
             val parts = baseTime.split(":")
@@ -236,37 +238,15 @@ class AddMedicineActivity : AppCompatActivity() {
             expandedDayTimes[day] = dayTimesBuilder.toString()
         }
 
-        // Gösterim amaçlı time string oluştur (ilk günün saati)
         val displayTime = state.customDayTimes.values.iterator().next()
 
-        val med = Medicine(name, displayTime, "", note)
+        val med = Medicine(name, displayTime, state.dateRangeText, note)
         med.isUseCustomDays = true
         med.customDayTimes = expandedDayTimes
         med.intervalDays = 1
-        med.startDate = 0
-        med.endDate = 0
+        med.startDate = state.selectedStartDate
+        med.endDate = state.selectedEndDate
         return med
-    }
-
-    /** Aynı isimde ilaç var mı kontrol eder */
-    private fun isDuplicateName(name: String): Boolean {
-        val list = MedicineRepository.loadMedicineList(this)
-
-        val editingMedicine: Medicine? = if (isEditMode) {
-            intent.getSerializableExtra("edit_medicine") as? Medicine
-        } else {
-            null
-        }
-
-        for (m in list) {
-            if (m.name.equals(name, ignoreCase = true)) {
-                if (editingMedicine != null && m.name.equals(editingMedicine.name, ignoreCase = true)) {
-                    continue
-                }
-                return true
-            }
-        }
-        return false
     }
 }
 
@@ -274,10 +254,8 @@ class AddMedicineActivity : AppCompatActivity() {
 //  FORM DURUMU
 // ══════════════════════════════════════════════════════════════
 
-/** Gün isimleri (Calendar sabiti → Türkçe) */
 private val DAY_NAMES = arrayOf("", "Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi")
 
-/** Chip sırası: Pzt → Paz, her biri Calendar gün sabitine eşleniyor */
 private val DAY_CHIPS = listOf(
     Calendar.MONDAY to "Pzt",
     Calendar.TUESDAY to "Sal",
@@ -292,10 +270,8 @@ private val DAY_ORDER = intArrayOf(
     Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY, Calendar.SUNDAY,
 )
 
-/**
- * Medicine nesnesinden frekans metnini çözer (isim: eskiden AddMedicineActivity'nin özel metoduydu,
- * artık hem form state'inin edit-mode yüklemesi hem de saf mantık olarak burada duruyor).
- */
+private val MEAL_OPTIONS = arrayOf("Fark Etmez", "Aç Karnına", "Tok Karnına")
+
 private fun resolveFrequencyText(medicine: Medicine): String {
     var currentFreq = "Günde 1 defa"
     val interval = medicine.intervalDays
@@ -338,6 +314,12 @@ private class AddMedicineFormState {
     var note by mutableStateOf("")
     var nameError by mutableStateOf<String?>(null)
 
+    // Açlık/Tokluk
+    var mealTiming by mutableStateOf(MEAL_OPTIONS[0])
+
+    // Kalan stok (adet)
+    var stockText by mutableStateOf("")
+
     var isCustomDayMode by mutableStateOf(false)
 
     var hour by mutableIntStateOf(8)
@@ -357,10 +339,11 @@ private class AddMedicineFormState {
     var dayTimeDialogFor by mutableStateOf<Int?>(null)
     var showDateRangeDialog by mutableStateOf(false)
 
-    /** Düzenleme modunda formu var olan bir ilacın verileriyle doldurur. */
     fun loadFrom(medicine: Medicine, context: Context) {
         name = medicine.name
         note = medicine.note ?: ""
+        mealTiming = medicine.mealTiming ?: MEAL_OPTIONS[0]
+        stockText = medicine.stockCount?.toString() ?: ""
 
         val medicineCustomDayTimes = medicine.customDayTimes
         if (medicine.isUseCustomDays && medicineCustomDayTimes != null) {
@@ -368,6 +351,10 @@ private class AddMedicineFormState {
             customDayTimes.clear()
             customDayTimes.putAll(medicineCustomDayTimes)
             customFreqText = resolveFrequencyText(medicine)
+            selectedStartDate = medicine.startDate
+            selectedEndDate = medicine.endDate
+            val dr = medicine.dateRange
+            if (!dr.isNullOrEmpty()) dateRangeText = dr
         } else {
             isCustomDayMode = false
             freqText = resolveFrequencyText(medicine)
@@ -411,7 +398,6 @@ private class AddMedicineFormState {
             "6 Günde Bir", "Haftada 1 Defa",
         )
 
-        // Güne özel modda sadece saat bazlı frekanslar mantıklı
         val CUSTOM_FREQUENCIES = arrayOf(
             "Günde 1 defa", "6 Saatte Bir", "8 Saatte Bir", "12 Saatte Bir",
         )
@@ -436,6 +422,7 @@ private fun AddMedicineScreen(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            @Suppress("DEPRECATION")
             val uri: Uri? = result.data!!.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
             if (uri != null) {
                 state.soundUri = uri.toString()
@@ -449,9 +436,6 @@ private fun AddMedicineScreen(
 
     Scaffold(
         topBar = {
-            // Klavye açılınca üst çubuğu gizle, kapanınca geri getir — yazarken içeriğe yer
-            // açan, Google'ın form ekranlarındaki gibi bir davranış. (Klavye açıkken kapat
-            // ikonu gizlenir; ekrandan çıkmak için sistem geri hareketi/tuşu kullanılır.)
             AnimatedVisibility(
                 visible = !WindowInsets.isImeVisible,
                 enter = expandVertically() + fadeIn(),
@@ -464,8 +448,6 @@ private fun AddMedicineScreen(
                             Icon(
                                 painter = painterResource(R.drawable.ic_add),
                                 contentDescription = "Kapat",
-                                // 45° döndürülmüş "+" ikonu bir "×" (kapat) simgesi veriyor —
-                                // ayrı bir kapat vektörü eklemeye gerek kalmıyor.
                                 modifier = Modifier.rotate(45f),
                             )
                         }
@@ -478,166 +460,166 @@ private fun AddMedicineScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                // Klavye açıkken kaydırma alanını klavye kadar içeri al: odaklı alan
-                // klavyenin üstüne kaydırılıp görünür kalır (adjustResize ile birlikte).
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
             FormCard(title = "💊 İlaç Bilgileri") {
-                    OutlinedTextField(
-                        value = state.name,
-                        onValueChange = {
-                            state.name = it
-                            state.nameError = null
-                        },
-                        label = { Text("İlaç Adı") },
-                        singleLine = true,
-                        isError = state.nameError != null,
-                        supportingText = state.nameError?.let { msg -> { Text(msg) } },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = state.note,
-                        onValueChange = { state.note = it },
-                        label = { Text("Not (İsteğe bağlı)") },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                OutlinedTextField(
+                    value = state.name,
+                    onValueChange = {
+                        state.name = it
+                        state.nameError = null
+                    },
+                    label = { Text("İlaç Adı") },
+                    singleLine = true,
+                    isError = state.nameError != null,
+                    supportingText = state.nameError?.let { msg -> { Text(msg) } },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = state.note,
+                    onValueChange = { state.note = it },
+                    label = { Text("Not (İsteğe bağlı)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = state.stockText,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) state.stockText = it },
+                    label = { Text("Kalan Tablet / Adet Sayısı (İsteğe bağlı)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-                FormCard(title = "🕐 Zamanlama Modu") {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            FormCard(title = "🍽️ Açlık / Tokluk Durumu") {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    MEAL_OPTIONS.forEachIndexed { index, option ->
                         SegmentedButton(
-                            selected = !state.isCustomDayMode,
-                            onClick = { state.isCustomDayMode = false },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        ) { Text("Standart") }
-                        SegmentedButton(
-                            selected = state.isCustomDayMode,
-                            onClick = { state.isCustomDayMode = true },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                        ) { Text("Güne Özel") }
-                    }
-                }
-
-                if (!state.isCustomDayMode) {
-                    FormCard(title = "⏰ Alarm Zamanı") {
-                        val timePickerState = rememberTimePickerState(
-                            initialHour = state.hour,
-                            initialMinute = state.minute,
-                            is24Hour = DateFormat.is24HourFormat(context),
-                        )
-                        LaunchedEffect(timePickerState.hour, timePickerState.minute) {
-                            state.hour = timePickerState.hour
-                            state.minute = timePickerState.minute
-                        }
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            TimeInput(state = timePickerState)
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        FrequencyDropdown(
-                            label = "Kullanım Sıklığı",
-                            options = AddMedicineFormState.FREQUENCIES,
-                            selected = state.freqText,
-                            onSelect = { state.freqText = it },
-                        )
-                    }
-                }
-
-                if (state.isCustomDayMode) {
-                    FormCard(title = "📅 Günleri ve Saatleri Seçin") {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            selected = state.mealTiming == option,
+                            onClick = { state.mealTiming = option },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = MEAL_OPTIONS.size),
                         ) {
-                            DAY_CHIPS.forEach { (calDay, label) ->
-                                FilterChip(
-                                    selected = state.customDayTimes.containsKey(calDay),
-                                    onClick = {
-                                        if (state.customDayTimes.containsKey(calDay)) {
-                                            state.customDayTimes.remove(calDay)
-                                        } else {
-                                            state.dayTimeDialogFor = calDay
-                                        }
-                                    },
-                                    label = { Text(label) },
-                                )
-                            }
+                            Text(option, fontSize = 13.sp)
                         }
+                    }
+                }
+            }
 
-                        val selectedDays = DAY_ORDER.filter { state.customDayTimes.containsKey(it) }
-                        if (selectedDays.isNotEmpty()) {
-                            Column(modifier = Modifier.padding(top = 12.dp)) {
-                                selectedDays.forEach { day ->
-                                    val time = state.customDayTimes.getValue(day)
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(DAY_NAMES[day], modifier = Modifier.weight(1f), fontSize = 16.sp)
-                                        Text(
-                                            formatTimeForDisplay(context, time),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 16.sp,
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                        )
-                                        TextButton(onClick = { state.dayTimeDialogFor = day }) {
-                                            Text("Düzenle", fontSize = 12.sp)
-                                        }
+            FormCard(title = "🕐 Zamanlama Modu") {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = !state.isCustomDayMode,
+                        onClick = { state.isCustomDayMode = false },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    ) { Text("Standart") }
+                    SegmentedButton(
+                        selected = state.isCustomDayMode,
+                        onClick = { state.isCustomDayMode = true },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    ) { Text("Güne Özel") }
+                }
+            }
+
+            if (!state.isCustomDayMode) {
+                FormCard(title = "⏰ Alarm Zamanı") {
+                    val timePickerState = rememberTimePickerState(
+                        initialHour = state.hour,
+                        initialMinute = state.minute,
+                        is24Hour = DateFormat.is24HourFormat(context),
+                    )
+                    LaunchedEffect(timePickerState.hour, timePickerState.minute) {
+                        state.hour = timePickerState.hour
+                        state.minute = timePickerState.minute
+                    }
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        TimeInput(state = timePickerState)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    FrequencyDropdown(
+                        label = "Kullanım Sıklığı",
+                        options = AddMedicineFormState.FREQUENCIES,
+                        selected = state.freqText,
+                        onSelect = { state.freqText = it },
+                    )
+                }
+            }
+
+            if (state.isCustomDayMode) {
+                FormCard(title = "📅 Günleri ve Saatleri Seçin") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DAY_CHIPS.forEach { (calDay, label) ->
+                            FilterChip(
+                                selected = state.customDayTimes.containsKey(calDay),
+                                onClick = {
+                                    if (state.customDayTimes.containsKey(calDay)) {
+                                        state.customDayTimes.remove(calDay)
+                                    } else {
+                                        state.dayTimeDialogFor = calDay
+                                    }
+                                },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+
+                    val selectedDays = DAY_ORDER.filter { state.customDayTimes.containsKey(it) }
+                    if (selectedDays.isNotEmpty()) {
+                        Column(modifier = Modifier.padding(top = 12.dp)) {
+                            selectedDays.forEach { day ->
+                                val time = state.customDayTimes.getValue(day)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(DAY_NAMES[day], modifier = Modifier.weight(1f), fontSize = 16.sp)
+                                    Text(
+                                        formatTimeForDisplay(context, time),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontSize = 16.sp,
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                    )
+                                    TextButton(onClick = { state.dayTimeDialogFor = day }) {
+                                        Text("Düzenle", fontSize = 12.sp)
                                     }
                                 }
                             }
                         }
-
-                        Spacer(Modifier.height(12.dp))
-                        FrequencyDropdown(
-                            label = "Kullanım Sıklığı",
-                            options = AddMedicineFormState.CUSTOM_FREQUENCIES,
-                            selected = state.customFreqText,
-                            onSelect = { state.customFreqText = it },
-                        )
                     }
+
+                    Spacer(Modifier.height(12.dp))
+                    FrequencyDropdown(
+                        label = "Kullanım Sıklığı",
+                        options = AddMedicineFormState.CUSTOM_FREQUENCIES,
+                        selected = state.customFreqText,
+                        onSelect = { state.customFreqText = it },
+                    )
                 }
+            }
 
-                FormCard(title = "📅 Tarih & Ses Ayarları") {
-                    if (!state.isCustomDayMode) {
-                        OutlinedButton(
-                            onClick = { state.showDateRangeDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_calendar),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Tarih Aralığı Seç")
-                        }
-                        if (state.dateRangeText.isNotEmpty()) {
-                            Text(
-                                text = state.dateRangeText,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp),
-                                textAlign = TextAlign.Center,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    OutlinedButton(
-                        onClick = { soundPickerLauncher.launch(buildSoundPickerIntent(state.soundUri)) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("🎵 Bildirim Sesini Seç")
-                    }
+            FormCard(title = "📅 Tarih & Ses Ayarları") {
+                OutlinedButton(
+                    onClick = { state.showDateRangeDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_calendar),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Tarih Aralığı Seç")
+                }
+                if (state.dateRangeText.isNotEmpty()) {
                     Text(
-                        text = state.soundTitle,
+                        text = state.dateRangeText,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 8.dp),
@@ -646,28 +628,38 @@ private fun AddMedicineScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Spacer(Modifier.height(12.dp))
 
-                Button(
-                    onClick = onSave,
+                OutlinedButton(
+                    onClick = { soundPickerLauncher.launch(buildSoundPickerIntent(state.soundUri)) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("🎵 Bildirim Sesini Seç")
+                }
+                Text(
+                    text = state.soundTitle,
                     modifier = Modifier
                         .fillMaxWidth()
-                        // padding'i height'tan ÖNCE veriyoruz: aksi halde height(56dp) önce
-                        // uygulanıp toplam yüksekliği 56dp'ye sabitliyor, sonra padding onun
-                        // içinden ~32dp yiyor ve butona metin için sadece ~24dp kalıyordu
-                        // (yazı dikey kırpılıyordu). Bu sırada padding dış boşluk (margin),
-                        // height ise butonun kendi yüksekliği olur.
-                        .padding(top = 8.dp, bottom = 24.dp)
-                        .height(56.dp),
-                    // Şekli elle vermiyoruz: M3'ün varsayılan (hap/stadium) buton şekli
-                    // aşağıdaki OutlinedButton'larla ve segmented button'la aynı — böylece
-                    // ekrandaki tüm butonlar tutarlı, tasarlanmış bir aile gibi görünüyor.
-                ) {
-                    Text(
-                        text = if (isEditMode) "Güncelle" else "İlacı Kaydet",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
+                        .padding(top = 8.dp),
+                    textAlign = TextAlign.Center,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Button(
+                onClick = onSave,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 24.dp)
+                    .height(56.dp),
+            ) {
+                Text(
+                    text = if (isEditMode) "Güncelle" else "İlacı Kaydet",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
         }
     }
 
@@ -705,7 +697,7 @@ private fun AddMedicineScreen(
         )
     }
 
-    // Tarih aralığı seçme dialogu
+    // Tarih aralığı seçme dialogu (UTC -> Yerel Saat Normalizasyonu)
     if (state.showDateRangeDialog) {
         val rangeState = rememberDateRangePickerState(
             initialSelectedStartDateMillis = state.selectedStartDate.takeIf { it != 0L },
@@ -718,9 +710,22 @@ private fun AddMedicineScreen(
                     val start = rangeState.selectedStartDateMillis
                     val end = rangeState.selectedEndDateMillis
                     if (start != null && end != null) {
-                        state.selectedStartDate = start
-                        state.selectedEndDate = end
-                        state.dateRangeText = formatDateRange(start, end)
+                        // UTC milisaniyesini yerel gün başlangıcı ve sonuna dönüştür
+                        val utcCalStart = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = start }
+                        val localCalStart = Calendar.getInstance().apply {
+                            set(utcCalStart.get(Calendar.YEAR), utcCalStart.get(Calendar.MONTH), utcCalStart.get(Calendar.DAY_OF_MONTH), 0, 0, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }
+
+                        val utcCalEnd = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = end }
+                        val localCalEnd = Calendar.getInstance().apply {
+                            set(utcCalEnd.get(Calendar.YEAR), utcCalEnd.get(Calendar.MONTH), utcCalEnd.get(Calendar.DAY_OF_MONTH), 23, 59, 59)
+                            set(Calendar.MILLISECOND, 999)
+                        }
+
+                        state.selectedStartDate = localCalStart.timeInMillis
+                        state.selectedEndDate = localCalEnd.timeInMillis
+                        state.dateRangeText = formatDateRange(localCalStart.timeInMillis, localCalEnd.timeInMillis)
                     }
                     state.showDateRangeDialog = false
                 }) { Text("Tamam") }
@@ -775,8 +780,6 @@ private fun FormCard(title: String, content: @Composable ColumnScope.() -> Unit)
             .fillMaxWidth()
             .padding(bottom = 16.dp),
         shape = RoundedCornerShape(16.dp),
-        // containerColor'ı elle vermiyoruz — bkz. MainActivity.MedicineCard'daki aynı yorum:
-        // M3 varsayılanı (surfaceContainerLow) arka plandan otomatik ayrışan bir ton veriyor.
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -789,5 +792,26 @@ private fun FormCard(title: String, content: @Composable ColumnScope.() -> Unit)
             )
             content()
         }
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun AddMedicineScreenPreview() {
+    IlacTakipTheme {
+        val state = remember {
+            AddMedicineFormState().apply {
+                name = "Aspirin"
+                mealTiming = "Tok Karnına"
+                stockText = "20"
+                note = "Sabah kahvaltıdan sonra"
+            }
+        }
+        AddMedicineScreen(
+            state = state,
+            isEditMode = false,
+            onBack = {},
+            onSave = {},
+        )
     }
 }

@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog as ComposeAlertDialog
@@ -44,13 +45,17 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -69,10 +74,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.YucelDigital.ilactakip.ui.theme.IlacTakipTheme
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -86,12 +95,13 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val data = result.data!!
             val isEditMode = data.getBooleanExtra("is_edit", false)
+            @Suppress("DEPRECATION")
             val newMedicine = data.getSerializableExtra("new_medicine") as? Medicine
 
             if (newMedicine != null) {
                 if (isEditMode) {
                     val editPosition = data.getIntExtra("edit_position", -1)
-                    if (editPosition != -1) {
+                    if (editPosition != -1 && editPosition < medicineList.size) {
                         cancelAlarm(medicineList[editPosition])
                         medicineList[editPosition] = newMedicine
                         Toast.makeText(this, "İlaç güncellendi ✓", Toast.LENGTH_SHORT).show()
@@ -128,7 +138,6 @@ class MainActivity : AppCompatActivity() {
                     onActiveChanged = { medicine, isChecked ->
                         val index = medicineList.indexOf(medicine)
                         if (index >= 0) {
-                            // Yerinde mutasyon yerine güncellenmiş klonla değiştir → yeniden çizim.
                             val updated = medicine.copy().apply { isActive = isChecked }
                             if (!isChecked) {
                                 cancelAlarm(updated)
@@ -144,7 +153,17 @@ class MainActivity : AppCompatActivity() {
                     onTakenChanged = { medicine, isChecked ->
                         val index = medicineList.indexOf(medicine)
                         if (index >= 0) {
-                            medicineList[index] = medicine.copy().apply { isTaken = isChecked }
+                            if (isChecked) {
+                                MedicineRepository.markAsTaken(this, medicine.name, medicine.time, medicine.id)
+                            } else {
+                                MedicineRepository.resetTakenStatus(this, medicine.name, medicine.id)
+                            }
+                            val currentStock = medicine.stockCount
+                            val newStock = if (isChecked && currentStock != null && currentStock > 0) currentStock - 1 else currentStock
+                            medicineList[index] = medicine.copy().apply {
+                                isTaken = isChecked
+                                stockCount = newStock
+                            }
                             saveData()
                         }
                     },
@@ -154,6 +173,7 @@ class MainActivity : AppCompatActivity() {
                         saveData()
                         Toast.makeText(this, "İlaç silindi", Toast.LENGTH_SHORT).show()
                     },
+                    onOpenSettings = { openAppSettings() },
                 )
             }
         }
@@ -170,19 +190,15 @@ class MainActivity : AppCompatActivity() {
     //  İZİN YÖNETİMİ
     // ══════════════════════════════════════════════════════════════
 
-    /** Tüm izinleri sırayla kontrol et ve iste */
     private fun requestAllPermissions() {
         requestNotificationPermission()
     }
-
-    // ── 1. Bildirim İzni (Android 13+) ──
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED
             ) {
-                // Daha önce reddedildiyse neden gerekli olduğunu açıkla
                 if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.POST_NOTIFICATIONS)) {
                     AlertDialog.Builder(this)
                         .setTitle("Bildirim İzni Gerekli")
@@ -216,14 +232,11 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode == REQ_NOTIFICATION) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // İzin verildi, sonraki izne geç
                 checkAlarmPermission()
             } else {
-                // İzin reddedildi
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     !ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.POST_NOTIFICATIONS)
                 ) {
-                    // "Tekrar sorma" seçildi → kullanıcıyı ayarlara yönlendir
                     AlertDialog.Builder(this)
                         .setTitle("Bildirim İzni Kapalı")
                         .setMessage(
@@ -240,8 +253,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
-    // ── 2. Kesin Alarm İzni (Android 12+) ──
 
     private fun checkAlarmPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -264,8 +275,6 @@ class MainActivity : AppCompatActivity() {
         }
         checkFullScreenIntentPermission()
     }
-
-    // ── 3. Tam Ekran Alarm İzni (Android 14+) ──
 
     private fun checkFullScreenIntentPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -292,7 +301,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Uygulama ayarları sayfasını aç (izin "tekrar sorma" seçildiyse) */
     private fun openAppSettings() {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
         intent.data = Uri.parse("package:$packageName")
@@ -312,9 +320,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadData() {
-        medicineList.clear()
-        medicineList.addAll(MedicineRepository.loadMedicineList(this))
-        medicineList.sortBy { it.time ?: "" }
+        val saved = MedicineRepository.loadMedicineList(this).sortedBy { it.time ?: "" }
+        if (medicineList != saved) {
+            medicineList.clear()
+            medicineList.addAll(saved)
+        }
     }
 
     private fun scheduleAlarm(medicine: Medicine) {
@@ -327,13 +337,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun scheduleStandardAlarm(medicine: Medicine) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-
-        val timeArray = medicine.time!!.split(", ")
+        val timeArray = medicine.time?.split(", ") ?: return
 
         for (rawTime in timeArray) {
             val singleTime = rawTime.trim()
+            val alarmId = AlarmHelper.getStandardAlarmId(medicine, singleTime)
 
             val intent = Intent(this, AlarmReceiver::class.java)
+            intent.putExtra("MEDICINE_ID", medicine.id)
             intent.putExtra("MEDICINE_NAME", medicine.name)
             intent.putExtra("MEDICINE_TIME", singleTime)
             intent.putExtra("MEDICINE_NOTE", medicine.note)
@@ -341,10 +352,9 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra("END_DATE", medicine.endDate)
             intent.putExtra("INTERVAL_DAYS", medicine.intervalDays)
             intent.putExtra("SOUND_URI", medicine.soundUri)
+            intent.putExtra("MEAL_TIMING", medicine.mealTiming)
             intent.putExtra("IS_CUSTOM_DAY", false)
             intent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false)
-
-            val alarmId = AlarmHelper.safeId(medicine.name + singleTime)
             intent.putExtra("ALARM_ID", alarmId)
 
             val pi = PendingIntent.getBroadcast(
@@ -362,8 +372,22 @@ class MainActivity : AppCompatActivity() {
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
 
-            if (calendar.timeInMillis <= System.currentTimeMillis()) {
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
+            val now = System.currentTimeMillis()
+            val interval = if (medicine.intervalDays > 0) medicine.intervalDays else 1
+
+            if (medicine.startDate != 0L && medicine.startDate > now) {
+                val startCal = Calendar.getInstance().apply {
+                    timeInMillis = medicine.startDate
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                calendar.timeInMillis = startCal.timeInMillis
+            } else {
+                while (calendar.timeInMillis <= now) {
+                    calendar.add(Calendar.DAY_OF_YEAR, interval)
+                }
             }
 
             setExactAlarm(alarmManager, calendar.timeInMillis, pi)
@@ -373,6 +397,7 @@ class MainActivity : AppCompatActivity() {
                 medicine.name, singleTime, alarmId,
                 medicine.startDate, medicine.endDate,
                 medicine.intervalDays, medicine.soundUri,
+                medicine.id,
             )
         }
     }
@@ -386,21 +411,21 @@ class MainActivity : AppCompatActivity() {
 
             for (rawTime in times) {
                 val singleTime = rawTime.trim()
+                val alarmId = AlarmHelper.getCustomDayAlarmId(medicine, calDay, singleTime)
 
                 val intent = Intent(this, AlarmReceiver::class.java)
+                intent.putExtra("MEDICINE_ID", medicine.id)
                 intent.putExtra("MEDICINE_NAME", medicine.name)
                 intent.putExtra("MEDICINE_TIME", singleTime)
                 intent.putExtra("MEDICINE_NOTE", medicine.note)
-                intent.putExtra("START_DATE", 0L)
-                intent.putExtra("END_DATE", 0L)
+                intent.putExtra("START_DATE", medicine.startDate)
+                intent.putExtra("END_DATE", medicine.endDate)
                 intent.putExtra("INTERVAL_DAYS", 1)
                 intent.putExtra("SOUND_URI", medicine.soundUri)
+                intent.putExtra("MEAL_TIMING", medicine.mealTiming)
                 intent.putExtra("IS_CUSTOM_DAY", true)
                 intent.putExtra("CUSTOM_DAY", calDay)
                 intent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false)
-
-                // Benzersiz alarm ID: isim + gün + saat
-                val alarmId = AlarmHelper.safeId(medicine.name + "_day" + calDay + "_" + singleTime)
                 intent.putExtra("ALARM_ID", alarmId)
 
                 val pi = PendingIntent.getBroadcast(
@@ -412,7 +437,6 @@ class MainActivity : AppCompatActivity() {
                 val hour = timeParts[0].toInt()
                 val minute = timeParts[1].toInt()
 
-                // Sonraki uygun günü hesapla
                 val calendar = Calendar.getInstance()
                 calendar.set(Calendar.HOUR_OF_DAY, hour)
                 calendar.set(Calendar.MINUTE, minute)
@@ -420,7 +444,6 @@ class MainActivity : AppCompatActivity() {
                 calendar.set(Calendar.MILLISECOND, 0)
                 calendar.set(Calendar.DAY_OF_WEEK, calDay)
 
-                // Eğer bu haftanın o günü geçmişse, gelecek haftaya al
                 if (calendar.timeInMillis <= System.currentTimeMillis()) {
                     calendar.add(Calendar.WEEK_OF_YEAR, 1)
                 }
@@ -430,13 +453,13 @@ class MainActivity : AppCompatActivity() {
                 AlarmReceiver.scheduleNextCustomDayResetAlarm(
                     this,
                     medicine.name, singleTime, alarmId,
-                    calDay, medicine.soundUri,
+                    calDay, medicine.soundUri, medicine.endDate,
+                    medicine.id,
                 )
             }
         }
     }
 
-    /** Kesin alarm kur — API seviyesine göre uygun yöntemi seçer */
     private fun setExactAlarm(am: AlarmManager, triggerAt: Long, pi: PendingIntent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (am.canScheduleExactAlarms()) {
@@ -463,16 +486,25 @@ private fun MainScreen(
     onActiveChanged: (Medicine, Boolean) -> Unit,
     onTakenChanged: (Medicine, Boolean) -> Unit,
     onDeleteConfirmed: (Medicine) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
-    // Kompakt, tepede sabit başlık. pinnedScrollBehavior: içerik çubuğun altından
-    // kayınca çubuk yerinde kalır ama M3'ün ince "yükseltilmiş" renk tonunu alır.
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    var showHistorySheet by remember { mutableStateOf(false) }
+    var showBatteryGuide by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text("İlaç Takip") },
+                actions = {
+                    IconButton(onClick = { showHistorySheet = true }) {
+                        Icon(painterResource(R.drawable.ic_clock), contentDescription = "İlaç Geçmişi")
+                    }
+                    IconButton(onClick = { showBatteryGuide = true }) {
+                        Icon(painterResource(R.drawable.ic_info), contentDescription = "Pil & Alarm Rehberi")
+                    }
+                },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -499,7 +531,7 @@ private fun MainScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                itemsIndexed(medicines) { index, medicine ->
+                itemsIndexed(medicines, key = { _, item -> item.id }) { index, medicine ->
                     MedicineCard(
                         medicine = medicine,
                         onClick = { onEditClick(medicine, index) },
@@ -507,6 +539,112 @@ private fun MainScreen(
                         onTakenChanged = { onTakenChanged(medicine, it) },
                         onDelete = { onDeleteConfirmed(medicine) },
                     )
+                }
+            }
+        }
+    }
+
+    if (showHistorySheet) {
+        HistoryBottomSheet(onDismiss = { showHistorySheet = false })
+    }
+
+    if (showBatteryGuide) {
+        ComposeAlertDialog(
+            onDismissRequest = { showBatteryGuide = false },
+            title = { Text("⏰ Alarm & Pil Rehberi") },
+            text = {
+                Text(
+                    "Xiaomi, Huawei, Samsung gibi cihazlarda kilit ekranında alarmların sorunsuz açılması için:\n\n" +
+                        "1. 'Otomatik Başlatma' (Autostart) iznini verin.\n" +
+                        "2. Pil ayarlarından 'Kısıtlama Yok' seçin.\n" +
+                        "3. 'Kilit ekranında göster' iznini açın.",
+                    lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBatteryGuide = false
+                    onOpenSettings()
+                }) { Text("Ayarları Aç") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatteryGuide = false }) { Text("Anladım") }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HistoryBottomSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var logs by remember { mutableStateOf(MedicineRepository.loadLogs(context)) }
+    val sheetState = rememberModalBottomSheetState()
+    val dateFormat = remember { SimpleDateFormat("d MMMM yyyy HH:mm", Locale.forLanguageTag("tr")) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("📜 İlaç Kullanım Geçmişi", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                if (logs.isNotEmpty()) {
+                    TextButton(onClick = {
+                        MedicineRepository.clearLogs(context)
+                        logs = emptyList()
+                    }) {
+                        Text("Temizle", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (logs.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Henüz kaydedilmiş kullanım geçmişi yok.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(380.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(logs, key = { it.id }) { log ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column {
+                                    Text(log.medicineName, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                                    Text(dateFormat.format(Date(log.timestamp)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text("Alındı ✓", color = colorResource(R.color.status_taken), fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -598,15 +736,13 @@ private fun MedicineCard(
     }
     val dateRange = medicine.dateRange
     val note = medicine.note
+    val mealTiming = medicine.mealTiming
+    val stockCount = medicine.stockCount
 
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        // containerColor'ı elle vermiyoruz: M3'ün varsayılanı (surfaceContainerLow) arka
-        // plandan otomatik olarak biraz daha açık/koyu bir ton alıp kartı "yükseltir" —
-        // biz burada surface'e sabitleyince koyu modda arka planla neredeyse aynı renk
-        // olduğu için kart görünmez oluyordu.
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -627,19 +763,34 @@ private fun MedicineCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = statusText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = statusColor,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = statusText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = statusColor,
+                        )
+                        if (!mealTiming.isNullOrEmpty() && mealTiming != "Fark Etmez") {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Text(
+                                    text = "🍽️ $mealTiming",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+
                     Switch(
                         checked = medicine.isActive,
                         onCheckedChange = onActiveChanged,
                         enabled = !isExpired,
-                        // Özel renk vermiyoruz — M3'ün varsayılan Switch renkleri zaten
-                        // MaterialTheme.colorScheme.primary'den geliyor, dynamic color'ı
-                        // otomatik takip eder.
                     )
                 }
 
@@ -664,7 +815,7 @@ private fun MedicineCard(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    if (!medicine.isUseCustomDays && !dateRange.isNullOrEmpty()) {
+                    if (!dateRange.isNullOrEmpty()) {
                         Spacer(Modifier.width(12.dp))
                         Text("📅 ", fontSize = 12.sp)
                         Text(
@@ -689,6 +840,23 @@ private fun MedicineCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                if (stockCount != null) {
+                    val isLow = stockCount <= 3
+                    Surface(
+                        color = if (isLow) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(top = 6.dp),
+                    ) {
+                        Text(
+                            text = if (isLow) "⚠ Az Kaldı: $stockCount adet" else "📦 Kalan: $stockCount adet",
+                            fontSize = 11.sp,
+                            fontWeight = if (isLow) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isLow) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
                 }
@@ -735,10 +903,10 @@ private fun MedicineCard(
     }
 }
 
-/** HashMap<calDay, times> → "Pzt 09:00, Sal 10:30" formatına dönüştür (saatler cihaz formatında) */
+/** HashMap<calDay, times> → "Pzt 09:00, Sal 10:30" formatına dönüştür */
 private fun formatCustomDayTimes(context: Context, dayTimes: Map<Int, String>): String {
     val shortNames = arrayOf("", "Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt")
-    val ordered = intArrayOf(2, 3, 4, 5, 6, 7, 1) // Pzt-Paz sırası
+    val ordered = intArrayOf(2, 3, 4, 5, 6, 7, 1)
 
     val sb = StringBuilder()
     for (day in ordered) {
@@ -748,4 +916,39 @@ private fun formatCustomDayTimes(context: Context, dayTimes: Map<Int, String>): 
         sb.append(shortNames[day]).append(" ").append(formatTimeForDisplay(context, firstTime))
     }
     return sb.toString()
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun MainScreenPreview() {
+    IlacTakipTheme {
+        MainScreen(
+            medicines = listOf(
+                Medicine("Aspirin", "09:00", "1 Eki - 10 Eki", "Yemekten sonra").apply {
+                    mealTiming = "Tok Karnına"
+                    stockCount = 15
+                    isActive = true
+                    isTaken = false
+                },
+                Medicine("Parol", "14:00", null, "Ağrı olursa").apply {
+                    mealTiming = "Aç Karnına"
+                    stockCount = 2
+                    isActive = true
+                    isTaken = true
+                },
+                Medicine("Vitamin D", "19:00", null, null).apply {
+                    mealTiming = "Fark Etmez"
+                    stockCount = 5
+                    isActive = false
+                    isTaken = false
+                }
+            ),
+            onAddClick = {},
+            onEditClick = { _, _ -> },
+            onActiveChanged = { _, _ -> },
+            onTakenChanged = { _, _ -> },
+            onDeleteConfirmed = {},
+            onOpenSettings = {},
+        )
+    }
 }

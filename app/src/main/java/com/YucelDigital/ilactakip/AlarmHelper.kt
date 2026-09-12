@@ -6,19 +6,28 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * Alarm iptal işlemleri için merkezi yardımcı sınıf.
+ * Alarm iptal ve ID üretim işlemleri için merkezi yardımcı sınıf.
  * Duplicate kodları önler — tek bir yerden yönetilir.
  */
 object AlarmHelper {
 
     /**
      * hashCode()'dan negatif olmayan bir kimlik üretir.
-     * Math.abs(hashCode()) kullanılmıyor çünkü hashCode() tam olarak
-     * Integer.MIN_VALUE döndürürse Math.abs onu pozitife çeviremez
-     * (Integer.MIN_VALUE'nin mutlak değeri int aralığında temsil edilemez).
      */
     @JvmStatic
     fun safeId(key: String): Int = key.hashCode() and 0x7fffffff
+
+    @JvmStatic
+    fun getStandardAlarmId(medicine: Medicine, singleTime: String): Int {
+        val id = if (!medicine.id.isNullOrEmpty()) medicine.id else medicine.name
+        return safeId("${id}_$singleTime")
+    }
+
+    @JvmStatic
+    fun getCustomDayAlarmId(medicine: Medicine, calDay: Int, singleTime: String): Int {
+        val id = if (!medicine.id.isNullOrEmpty()) medicine.id else medicine.name
+        return safeId("${id}_day${calDay}_$singleTime")
+    }
 
     /**
      * Bir ilaca ait tüm alarmları (ana alarm + reset alarm) iptal eder.
@@ -43,24 +52,35 @@ object AlarmHelper {
         val timeArray = time.split(", ")
         for (rawTime in timeArray) {
             val singleTime = rawTime.trim()
-            val alarmId = safeId(medicine.name + singleTime)
-            val resetAlarmId = safeId(medicine.name + singleTime + "_reset")
-
             val intent = Intent(context, AlarmReceiver::class.java)
 
-            val pi = PendingIntent.getBroadcast(
-                context, alarmId, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            // Hem yeni (id tabanlı) hem eski (isim tabanlı) alarmları iptal et (geriye dönük uyumluluk)
+            val idsToCancel = listOf(
+                getStandardAlarmId(medicine, singleTime),
+                safeId(medicine.name + singleTime),
             )
-            alarmManager.cancel(pi)
-            pi.cancel()
+            val resetIdsToCancel = listOf(
+                safeId("${if (!medicine.id.isNullOrEmpty()) medicine.id else medicine.name}_${singleTime}_reset"),
+                safeId(medicine.name + singleTime + "_reset"),
+            )
 
-            val resetPi = PendingIntent.getBroadcast(
-                context, resetAlarmId, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            alarmManager.cancel(resetPi)
-            resetPi.cancel()
+            for (alarmId in idsToCancel) {
+                val pi = PendingIntent.getBroadcast(
+                    context, alarmId, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                alarmManager.cancel(pi)
+                pi.cancel()
+            }
+
+            for (resetAlarmId in resetIdsToCancel) {
+                val resetPi = PendingIntent.getBroadcast(
+                    context, resetAlarmId, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                alarmManager.cancel(resetPi)
+                resetPi.cancel()
+            }
         }
     }
 
@@ -78,23 +98,33 @@ object AlarmHelper {
 
             for (rawTime in times) {
                 val singleTime = rawTime.trim()
-                val alarmId = safeId(medicine.name + "_day" + calDay + "_" + singleTime)
-                val resetAlarmId = safeId(medicine.name + "_day" + calDay + "_" + singleTime + "_reset")
 
-                val pi = PendingIntent.getBroadcast(
-                    context, alarmId, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                val idsToCancel = listOf(
+                    getCustomDayAlarmId(medicine, calDay, singleTime),
+                    safeId(medicine.name + "_day" + calDay + "_" + singleTime),
                 )
-                alarmManager.cancel(pi)
-                pi.cancel()
+                val resetIdsToCancel = listOf(
+                    safeId("${if (!medicine.id.isNullOrEmpty()) medicine.id else medicine.name}_day${calDay}_${singleTime}_reset"),
+                    safeId(medicine.name + "_day" + calDay + "_" + singleTime + "_reset"),
+                )
 
-                // Reset alarm'ı da iptal et
-                val resetPi = PendingIntent.getBroadcast(
-                    context, resetAlarmId, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-                alarmManager.cancel(resetPi)
-                resetPi.cancel()
+                for (alarmId in idsToCancel) {
+                    val pi = PendingIntent.getBroadcast(
+                        context, alarmId, intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                    alarmManager.cancel(pi)
+                    pi.cancel()
+                }
+
+                for (resetAlarmId in resetIdsToCancel) {
+                    val resetPi = PendingIntent.getBroadcast(
+                        context, resetAlarmId, intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                    alarmManager.cancel(resetPi)
+                    resetPi.cancel()
+                }
             }
         }
     }

@@ -8,6 +8,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -16,7 +18,7 @@ import java.util.Calendar
 class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
-        private const val CHANNEL_ID = "medicine_alarm_channel"
+        private const val CHANNEL_ID = "medicine_alarm_channel_v2"
 
         /**
          * IS_RESET = true olduğunda bu alarm "ön sıfırlama" alarmıdır.
@@ -26,13 +28,13 @@ class AlarmReceiver : BroadcastReceiver() {
 
         /**
          * ANA ALARM'ı bir sonraki döngü için kur.
-         * Her tetiklenmede bu çağrılarak alarm zinciri korunur.
          */
         @JvmStatic
+        @JvmOverloads
         fun rescheduleNextMainAlarm(
             context: Context, name: String?, time: String?, note: String?,
             alarmId: Int, startDate: Long, endDate: Long,
-            intervalDays: Int, soundUriStr: String?,
+            intervalDays: Int, soundUriStr: String?, medicineId: String? = null, mealTiming: String? = null,
         ) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
             if (time == null || !time.contains(":")) return
@@ -52,9 +54,8 @@ class AlarmReceiver : BroadcastReceiver() {
             next.set(Calendar.MINUTE, minute)
             next.set(Calendar.SECOND, 0)
             next.set(Calendar.MILLISECOND, 0)
-            next.add(Calendar.DAY_OF_YEAR, intervalDays) // Bir sonraki döngü
+            next.add(Calendar.DAY_OF_YEAR, intervalDays)
 
-            // Bitiş tarihi geçtiyse yeniden kurma
             if (endDate != 0L) {
                 val endCal = Calendar.getInstance()
                 endCal.timeInMillis = endDate
@@ -64,6 +65,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
 
             val intent = Intent(context, AlarmReceiver::class.java)
+            intent.putExtra("MEDICINE_ID", medicineId)
             intent.putExtra("MEDICINE_NAME", name)
             intent.putExtra("MEDICINE_TIME", time)
             intent.putExtra("MEDICINE_NOTE", note)
@@ -72,6 +74,7 @@ class AlarmReceiver : BroadcastReceiver() {
             intent.putExtra("END_DATE", endDate)
             intent.putExtra("INTERVAL_DAYS", intervalDays)
             intent.putExtra("SOUND_URI", soundUriStr)
+            intent.putExtra("MEAL_TIMING", mealTiming)
             intent.putExtra(EXTRA_IS_RESET, false)
 
             val pi = PendingIntent.getBroadcast(
@@ -86,9 +89,11 @@ class AlarmReceiver : BroadcastReceiver() {
          * GÜNE ÖZEL ALARM'ı gelecek haftanın aynı günü için yeniden kur.
          */
         @JvmStatic
+        @JvmOverloads
         fun rescheduleCustomDayAlarm(
             context: Context, name: String?, time: String?, note: String?,
             alarmId: Int, soundUriStr: String?, calendarDay: Int,
+            endDate: Long = 0L, medicineId: String? = null, mealTiming: String? = null,
         ) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
             if (time == null || !time.contains(":")) return
@@ -109,19 +114,29 @@ class AlarmReceiver : BroadcastReceiver() {
             next.set(Calendar.SECOND, 0)
             next.set(Calendar.MILLISECOND, 0)
             next.set(Calendar.DAY_OF_WEEK, calendarDay)
-            next.add(Calendar.WEEK_OF_YEAR, 1) // Gelecek hafta
+            next.add(Calendar.WEEK_OF_YEAR, 1)
+
+            if (endDate != 0L) {
+                val endCal = Calendar.getInstance()
+                endCal.timeInMillis = endDate
+                endCal.set(Calendar.HOUR_OF_DAY, 23)
+                endCal.set(Calendar.MINUTE, 59)
+                if (next.timeInMillis > endCal.timeInMillis) return
+            }
 
             val intent = Intent(context, AlarmReceiver::class.java)
+            intent.putExtra("MEDICINE_ID", medicineId)
             intent.putExtra("MEDICINE_NAME", name)
             intent.putExtra("MEDICINE_TIME", time)
             intent.putExtra("MEDICINE_NOTE", note)
             intent.putExtra("ALARM_ID", alarmId)
             intent.putExtra("START_DATE", 0L)
-            intent.putExtra("END_DATE", 0L)
+            intent.putExtra("END_DATE", endDate)
             intent.putExtra("INTERVAL_DAYS", 1)
             intent.putExtra("SOUND_URI", soundUriStr)
             intent.putExtra("IS_CUSTOM_DAY", true)
             intent.putExtra("CUSTOM_DAY", calendarDay)
+            intent.putExtra("MEAL_TIMING", mealTiming)
             intent.putExtra(EXTRA_IS_RESET, false)
 
             val pi = PendingIntent.getBroadcast(
@@ -134,13 +149,13 @@ class AlarmReceiver : BroadcastReceiver() {
 
         /**
          * RESET ALARM'ı bir sonraki döngü için kur.
-         * Asıl alarmdan 60 dakika önce tetiklenerek "İlacı Aldım" işaretini temizler.
          */
         @JvmStatic
+        @JvmOverloads
         fun scheduleNextResetAlarm(
             context: Context, name: String?, time: String?, alarmId: Int,
             startDate: Long, endDate: Long,
-            intervalDays: Int, soundUriStr: String?,
+            intervalDays: Int, soundUriStr: String?, medicineId: String? = null,
         ) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
             if (time == null || !time.contains(":")) return
@@ -161,16 +176,14 @@ class AlarmReceiver : BroadcastReceiver() {
             reset.set(Calendar.SECOND, 0)
             reset.set(Calendar.MILLISECOND, 0)
 
-            var resetMillis = reset.timeInMillis - (60 * 60 * 1000) // asıl alarmdan 60 dk öncesi
+            var resetMillis = reset.timeInMillis - (60 * 60 * 1000)
 
-            // Eğer bu reset saati (bugün için) geçmişse, gelecekteki uygun saate kadar interval ekle
             while (resetMillis <= System.currentTimeMillis()) {
                 resetMillis += (intervalDays.toLong() * 24 * 60 * 60 * 1000)
             }
 
             reset.timeInMillis = resetMillis
 
-            // Bitiş tarihinden sonraya geçtiyse planla
             if (endDate != 0L) {
                 val endCal = Calendar.getInstance()
                 endCal.timeInMillis = endDate
@@ -179,9 +192,10 @@ class AlarmReceiver : BroadcastReceiver() {
                 if (reset.timeInMillis > endCal.timeInMillis) return
             }
 
-            val resetAlarmId = AlarmHelper.safeId(name + time + "_reset")
+            val resetAlarmId = AlarmHelper.safeId("${medicineId ?: name}_${time}_reset")
 
             val intent = Intent(context, AlarmReceiver::class.java)
+            intent.putExtra("MEDICINE_ID", medicineId)
             intent.putExtra("MEDICINE_NAME", name)
             intent.putExtra("MEDICINE_TIME", time)
             intent.putExtra("ALARM_ID", alarmId)
@@ -201,18 +215,21 @@ class AlarmReceiver : BroadcastReceiver() {
 
         /** Ses URI'sini çözümle: null/boş → varsayılan alarm sesi */
         @JvmStatic
-        fun resolveSoundUri(soundUriStr: String?): Uri? {
+        fun resolveSoundUri(soundUriStr: String?): Uri {
             if (!soundUriStr.isNullOrEmpty()) {
-                return Uri.parse(soundUriStr)
+                try {
+                    return Uri.parse(soundUriStr)
+                } catch (ignored: Exception) {}
             }
-            return android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         }
 
         @JvmStatic
+        @JvmOverloads
         fun scheduleNextCustomDayResetAlarm(
             context: Context, name: String?, time: String?, alarmId: Int,
-            customDay: Int, soundUriStr: String?,
+            customDay: Int, soundUriStr: String?, endDate: Long = 0L, medicineId: String? = null,
         ) {
             if (time == null || !time.contains(":")) return
             val parts = time.split(":")
@@ -232,23 +249,32 @@ class AlarmReceiver : BroadcastReceiver() {
             reset.set(Calendar.MILLISECOND, 0)
             reset.set(Calendar.DAY_OF_WEEK, customDay)
 
-            var resetMillis = reset.timeInMillis - (60 * 60 * 1000) // 1 saat öncesi
+            var resetMillis = reset.timeInMillis - (60 * 60 * 1000)
 
-            // Eğer bu reset saati (bugün için) geçmişse, 1 hafta ekle
             while (resetMillis <= System.currentTimeMillis()) {
                 resetMillis += (7L * 24 * 60 * 60 * 1000)
             }
 
             reset.timeInMillis = resetMillis
 
-            val resetAlarmId = AlarmHelper.safeId(name + "_day" + customDay + "_" + time + "_reset")
+            if (endDate != 0L) {
+                val endCal = Calendar.getInstance()
+                endCal.timeInMillis = endDate
+                endCal.set(Calendar.HOUR_OF_DAY, 23)
+                endCal.set(Calendar.MINUTE, 59)
+                if (reset.timeInMillis > endCal.timeInMillis) return
+            }
+
+            val resetAlarmId = AlarmHelper.safeId("${medicineId ?: name}_day${customDay}_${time}_reset")
 
             val intent = Intent(context, AlarmReceiver::class.java)
+            intent.putExtra("MEDICINE_ID", medicineId)
             intent.putExtra("MEDICINE_NAME", name)
             intent.putExtra("MEDICINE_TIME", time)
             intent.putExtra("ALARM_ID", alarmId)
             intent.putExtra("IS_CUSTOM_DAY", true)
             intent.putExtra("CUSTOM_DAY", customDay)
+            intent.putExtra("END_DATE", endDate)
             intent.putExtra("SOUND_URI", soundUriStr)
             intent.putExtra(EXTRA_IS_RESET, true)
 
@@ -277,7 +303,7 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // Ortak veriler
+        val medicineId = intent.getStringExtra("MEDICINE_ID")
         val name = intent.getStringExtra("MEDICINE_NAME")
         val time = intent.getStringExtra("MEDICINE_TIME")
         val note = intent.getStringExtra("MEDICINE_NOTE")
@@ -289,59 +315,74 @@ class AlarmReceiver : BroadcastReceiver() {
         val isReset = intent.getBooleanExtra(EXTRA_IS_RESET, false)
         val isCustomDay = intent.getBooleanExtra("IS_CUSTOM_DAY", false)
         val customDay = intent.getIntExtra("CUSTOM_DAY", 0)
+        val mealTiming = intent.getStringExtra("MEAL_TIMING")
 
         // ---- RESET ALARMIYSA: isTaken'ı temizle, çık ----
         if (isReset) {
-            MedicineRepository.resetTakenStatus(context, name)
+            MedicineRepository.resetTakenStatus(context, name, medicineId)
             if (isCustomDay && customDay != 0) {
-                scheduleNextCustomDayResetAlarm(context, name, time, alarmId, customDay, soundUriStr)
+                scheduleNextCustomDayResetAlarm(context, name, time, alarmId, customDay, soundUriStr, endDate, medicineId)
             } else {
-                scheduleNextResetAlarm(context, name, time, alarmId, startDate, endDate, intervalDays, soundUriStr)
+                scheduleNextResetAlarm(context, name, time, alarmId, startDate, endDate, intervalDays, soundUriStr, medicineId)
             }
             return
         }
 
-        // ---- ANA ALARM: Tarih / Gün Kontrolü (sadece standart mod) ----
-        if (!isCustomDay && startDate != 0L) {
-            val today = Calendar.getInstance()
-            today.set(Calendar.HOUR_OF_DAY, 0)
-            today.set(Calendar.MINUTE, 0)
-            today.set(Calendar.SECOND, 0)
-            today.set(Calendar.MILLISECOND, 0)
-            val todayMillis = today.timeInMillis
+        // ---- ANA ALARM: Tarih / Gün Kontrolü ----
+        val today = Calendar.getInstance()
+        today.set(Calendar.HOUR_OF_DAY, 0)
+        today.set(Calendar.MINUTE, 0)
+        today.set(Calendar.SECOND, 0)
+        today.set(Calendar.MILLISECOND, 0)
+        val todayMillis = today.timeInMillis
 
-            if (todayMillis < startDate) {
-                rescheduleNextMainAlarm(context, name, time, note, alarmId, startDate, endDate, intervalDays, soundUriStr)
+        if (endDate != 0L) {
+            val endCal = Calendar.getInstance()
+            endCal.timeInMillis = endDate
+            endCal.set(Calendar.HOUR_OF_DAY, 23)
+            endCal.set(Calendar.MINUTE, 59)
+            if (todayMillis > endCal.timeInMillis) return
+        }
+
+        if (!isCustomDay && startDate != 0L) {
+            val startCal = Calendar.getInstance().apply {
+                timeInMillis = startDate
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val normalizedStartDate = startCal.timeInMillis
+
+            if (todayMillis < normalizedStartDate) {
+                rescheduleNextMainAlarm(
+                    context, name, time, note, alarmId, startDate, endDate,
+                    intervalDays, soundUriStr, medicineId, mealTiming,
+                )
                 return
             }
 
-            if (endDate != 0L) {
-                val endCal = Calendar.getInstance()
-                endCal.timeInMillis = endDate
-                endCal.set(Calendar.HOUR_OF_DAY, 23)
-                endCal.set(Calendar.MINUTE, 59)
-                if (todayMillis > endCal.timeInMillis) return
-            }
-
             if (intervalDays > 1) {
-                val diffMillis = todayMillis - startDate
+                val diffMillis = todayMillis - normalizedStartDate
                 val diffDays = diffMillis / (1000L * 60 * 60 * 24)
                 if (diffDays % intervalDays != 0L) {
-                    rescheduleNextMainAlarm(context, name, time, note, alarmId, startDate, endDate, intervalDays, soundUriStr)
+                    rescheduleNextMainAlarm(
+                        context, name, time, note, alarmId, startDate, endDate,
+                        intervalDays, soundUriStr, medicineId, mealTiming,
+                    )
                     return
                 }
             }
         }
 
-        // ---- ANA ALARM: Bildirim inşası + isTaken kontrolü disk I/O gerektirir.
-        // onReceive'i (ve dolayısıyla ana thread'i) hızlıca serbest bırakmak için
-        // bu kısmı arka planda çalıştırıyoruz.
         val appContext = context.applicationContext
         val pendingResult = goAsync()
         Thread {
             try {
-                handleMainAlarm(appContext, name, time, note, alarmId, startDate, endDate,
-                    intervalDays, soundUriStr, isCustomDay, customDay)
+                handleMainAlarm(
+                    appContext, name, time, note, alarmId, startDate, endDate,
+                    intervalDays, soundUriStr, isCustomDay, customDay, medicineId, mealTiming,
+                )
             } finally {
                 pendingResult.finish()
             }
@@ -349,34 +390,31 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Ana alarm tetiklendiğinde bildirim inşası + kendini yeniden kurma (arka planda çalışır).
-     * Test kodu (Robolectric) goAsync()/arka plan thread'ini devreye sokmadan bu mantığı
-     * doğrudan ve senkron çağırabilsin diye public bırakıldı.
+     * Ana alarm tetiklendiğinde bildirim inşası + kendini yeniden kurma.
      */
+    @JvmOverloads
     fun handleMainAlarm(
         context: Context, name: String?, time: String?, note: String?, alarmId: Int,
         startDate: Long, endDate: Long, intervalDays: Int, soundUriStr: String?,
-        isCustomDay: Boolean, customDay: Int,
+        isCustomDay: Boolean, customDay: Int, medicineId: String? = null, mealTiming: String? = null,
     ) {
-        // ---- ANA ALARM: Bildirim Göster ----
-        // İsimle eşleştirilir (bkz. MedicineRepository.markAsTaken açıklaması) —
-        // güne özel modda Medicine.time sadece tek bir günün saatini tuttuğu için
-        // saat bazlı eşleştirme hatalı biçimde eşleşmeyi kaçırıyordu.
         var isAlreadyTaken = false
         val medicineList = MedicineRepository.loadMedicineList(context)
         for (m in medicineList) {
-            if (m.name.equals(name, ignoreCase = true)) {
-                if (m.isTaken) {
-                    isAlreadyTaken = true
-                }
+            val matchesId = !medicineId.isNullOrEmpty() && m.id == medicineId
+            val matchesName = (medicineId.isNullOrEmpty() || m.id.isNullOrEmpty()) && m.name.equals(name, ignoreCase = true)
+            if (matchesId || matchesName) {
+                if (m.isTaken) isAlreadyTaken = true
                 break
             }
         }
 
         if (!isAlreadyTaken) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            val soundUri = resolveSoundUri(soundUriStr)
 
             val fullScreenIntent = Intent(context, AlarmActivity::class.java)
+            fullScreenIntent.putExtra("MEDICINE_ID", medicineId)
             fullScreenIntent.putExtra("MEDICINE_NAME", name)
             fullScreenIntent.putExtra("MEDICINE_TIME", time)
             fullScreenIntent.putExtra("MEDICINE_NOTE", note)
@@ -387,6 +425,7 @@ class AlarmReceiver : BroadcastReceiver() {
             fullScreenIntent.putExtra("SOUND_URI", soundUriStr)
             fullScreenIntent.putExtra("IS_CUSTOM_DAY", isCustomDay)
             fullScreenIntent.putExtra("CUSTOM_DAY", customDay)
+            fullScreenIntent.putExtra("MEAL_TIMING", mealTiming)
             fullScreenIntent.setFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_USER_ACTION or
@@ -404,23 +443,27 @@ class AlarmReceiver : BroadcastReceiver() {
                 )
                 channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
                 channel.enableVibration(true)
-                channel.setSound(null, null)
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                channel.setSound(soundUri, audioAttributes)
                 nm?.createNotificationChannel(channel)
             }
-            buildAndNotify(context, nm, CHANNEL_ID, name, time, note,
+            buildAndNotify(
+                context, nm, CHANNEL_ID, medicineId, name, time, note,
                 alarmId, startDate, endDate, intervalDays, soundUriStr,
-                isCustomDay, customDay, fullScreenPI)
+                isCustomDay, customDay, mealTiming, fullScreenPI,
+            )
         }
 
         // ---- KENDİNİ YENİDEN KUR ----
         if (isCustomDay && customDay != 0) {
-            // Güne özel: Gelecek haftanın aynı günü için yeniden kur
-            rescheduleCustomDayAlarm(context, name, time, note, alarmId, soundUriStr, customDay)
-            scheduleNextCustomDayResetAlarm(context, name, time, alarmId, customDay, soundUriStr)
+            rescheduleCustomDayAlarm(context, name, time, note, alarmId, soundUriStr, customDay, endDate, medicineId, mealTiming)
+            scheduleNextCustomDayResetAlarm(context, name, time, alarmId, customDay, soundUriStr, endDate, medicineId)
         } else {
-            // Standart: Bir sonraki döngü
-            rescheduleNextMainAlarm(context, name, time, note, alarmId, startDate, endDate, intervalDays, soundUriStr)
-            scheduleNextResetAlarm(context, name, time, alarmId, startDate, endDate, intervalDays, soundUriStr)
+            rescheduleNextMainAlarm(context, name, time, note, alarmId, startDate, endDate, intervalDays, soundUriStr, medicineId, mealTiming)
+            scheduleNextResetAlarm(context, name, time, alarmId, startDate, endDate, intervalDays, soundUriStr, medicineId)
         }
     }
 
@@ -430,14 +473,14 @@ class AlarmReceiver : BroadcastReceiver() {
 
     private fun buildAndNotify(
         context: Context, nm: NotificationManager?, channelId: String,
-        name: String?, time: String?, note: String?, alarmId: Int,
+        medicineId: String?, name: String?, time: String?, note: String?, alarmId: Int,
         startDate: Long, endDate: Long, intervalDays: Int,
         soundUriStr: String?, isCustomDay: Boolean, customDay: Int,
-        fullScreenPI: PendingIntent,
+        mealTiming: String?, fullScreenPI: PendingIntent,
     ) {
-        // "İlaç Aldım" aksiyon
         val takenIntent = Intent(context, NotificationActionReceiver::class.java)
         takenIntent.action = NotificationActionReceiver.ACTION_TAKEN
+        takenIntent.putExtra("MEDICINE_ID", medicineId)
         takenIntent.putExtra("MEDICINE_NAME", name)
         takenIntent.putExtra("MEDICINE_TIME", time)
         takenIntent.putExtra("ALARM_ID", alarmId)
@@ -446,9 +489,9 @@ class AlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // "Ertele 5 dk" aksiyon
         val snoozeIntent = Intent(context, NotificationActionReceiver::class.java)
         snoozeIntent.action = NotificationActionReceiver.ACTION_SNOOZE
+        snoozeIntent.putExtra("MEDICINE_ID", medicineId)
         snoozeIntent.putExtra("MEDICINE_NAME", name)
         snoozeIntent.putExtra("MEDICINE_TIME", time)
         snoozeIntent.putExtra("MEDICINE_NOTE", note)
@@ -459,16 +502,24 @@ class AlarmReceiver : BroadcastReceiver() {
         snoozeIntent.putExtra("SOUND_URI", soundUriStr)
         snoozeIntent.putExtra("IS_CUSTOM_DAY", isCustomDay)
         snoozeIntent.putExtra("CUSTOM_DAY", customDay)
-        snoozeIntent.putExtra("SNOOZE_MINUTES", 5)
+        snoozeIntent.putExtra("MEAL_TIMING", mealTiming)
+        snoozeIntent.putExtra("SNOOZE_MINUTES", 10)
         val snoozePI = PendingIntent.getBroadcast(
             context, alarmId + 2000, snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val subtitle = buildString {
+            append("$time — İlacınızı almayı unutmayın.")
+            if (!mealTiming.isNullOrEmpty()) {
+                append(" ($mealTiming)")
+            }
+        }
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_pill)
             .setContentTitle("İlaç Vakti: $name")
-            .setContentText("$time — İlacınızı almayı unutmayın.")
+            .setContentText(subtitle)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(false)
@@ -476,20 +527,8 @@ class AlarmReceiver : BroadcastReceiver() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setVibrate(longArrayOf(0, 500, 200, 500))
             .setFullScreenIntent(fullScreenPI, true)
-            // Not: Android 12+ bildirimlerinde aksiyon butonları sadece metin olarak çizilir
-            // (drawable ikon gösterilmez), bu yüzden metne emoji koymuyoruz — düz M3 etiket.
             .addAction(R.drawable.ic_pill, "İlaç Aldım", takenPI)
-            .addAction(R.drawable.ic_note, "Ertele", snoozePI)
-
-        // Bildirime KASITLI OLARAK ses eklenmiyor (builder.setSound(...) çağırmayın).
-        // androidx.core.app.NotificationCompatBuilder, channelId'li bir builder'da API 26+
-        // için Builder.setSound(...)'u her zaman sessizce mBuilder.setSound(null) ile
-        // geçersiz kılıyor (bkz. NotificationCompatBuilder.buildInternal()) — yani bu
-        // satıra ne yazarsak yazalım gerçek cihazda (Android 8+) hiçbir zaman çalmaz,
-        // sadece yanıltıcı olur. Kanal da (yukarıda) zaten sessiz oluşturuluyor.
-        // Sesin TEK kaynağı AlarmActivity.playAlarmSound() — tam ekran intent
-        // (yukarıdaki setFullScreenIntent) hem kilitli hem kilitsiz durumda güvenilir
-        // şekilde açılıp AlarmActivity'yi tetikler, çift ses riski de böylece ortadan kalkar.
+            .addAction(R.drawable.ic_note, "10 Dk Ertele", snoozePI)
 
         nm?.notify(alarmId, builder.build())
     }

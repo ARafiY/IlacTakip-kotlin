@@ -17,6 +17,17 @@ class BootReceiver : BroadcastReceiver() {
 
         for (medicine in medicineList) {
             if (medicine.isActive) {
+                // Bitiş tarihi geçmiş ilaçları yeniden kurma!
+                if (medicine.endDate != 0L) {
+                    val endCal = Calendar.getInstance()
+                    endCal.timeInMillis = medicine.endDate
+                    endCal.set(Calendar.HOUR_OF_DAY, 23)
+                    endCal.set(Calendar.MINUTE, 59)
+                    if (System.currentTimeMillis() > endCal.timeInMillis) {
+                        continue
+                    }
+                }
+
                 val customDayTimes = medicine.customDayTimes
                 if (medicine.isUseCustomDays && customDayTimes != null) {
                     scheduleCustomDayAlarms(context, medicine, customDayTimes)
@@ -52,11 +63,38 @@ class BootReceiver : BroadcastReceiver() {
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
 
-            if (calendar.timeInMillis <= System.currentTimeMillis()) {
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
+            val now = System.currentTimeMillis()
+            val interval = if (medicine.intervalDays > 0) medicine.intervalDays else 1
+
+            // Başlangıç tarihi gelecekte ise başlangıç tarihine ayarla
+            if (medicine.startDate != 0L && medicine.startDate > now) {
+                val startCal = Calendar.getInstance().apply {
+                    timeInMillis = medicine.startDate
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                calendar.timeInMillis = startCal.timeInMillis
+            } else {
+                // Geçmiş zamandaysa aralık gün sayısı kadar ilerlet
+                while (calendar.timeInMillis <= now) {
+                    calendar.add(Calendar.DAY_OF_YEAR, interval)
+                }
+            }
+
+            // Bitiş tarihini aştıysa kurma
+            if (medicine.endDate != 0L) {
+                val endCal = Calendar.getInstance().apply {
+                    timeInMillis = medicine.endDate
+                    set(Calendar.HOUR_OF_DAY, 23)
+                    set(Calendar.MINUTE, 59)
+                }
+                if (calendar.timeInMillis > endCal.timeInMillis) continue
             }
 
             val alarmIntent = Intent(context, AlarmReceiver::class.java)
+            alarmIntent.putExtra("MEDICINE_ID", medicine.id)
             alarmIntent.putExtra("MEDICINE_NAME", medicine.name)
             alarmIntent.putExtra("MEDICINE_TIME", singleTime)
             alarmIntent.putExtra("MEDICINE_NOTE", medicine.note)
@@ -64,10 +102,11 @@ class BootReceiver : BroadcastReceiver() {
             alarmIntent.putExtra("END_DATE", medicine.endDate)
             alarmIntent.putExtra("INTERVAL_DAYS", medicine.intervalDays)
             alarmIntent.putExtra("SOUND_URI", medicine.soundUri)
+            alarmIntent.putExtra("MEAL_TIMING", medicine.mealTiming)
             alarmIntent.putExtra("IS_CUSTOM_DAY", false)
             alarmIntent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false)
 
-            val alarmId = AlarmHelper.safeId(medicine.name + singleTime)
+            val alarmId = AlarmHelper.getStandardAlarmId(medicine, singleTime)
             alarmIntent.putExtra("ALARM_ID", alarmId)
 
             val pi = PendingIntent.getBroadcast(
@@ -82,6 +121,7 @@ class BootReceiver : BroadcastReceiver() {
                 medicine.name, singleTime, alarmId,
                 medicine.startDate, medicine.endDate,
                 medicine.intervalDays, medicine.soundUri,
+                medicine.id,
             )
         }
     }
@@ -116,19 +156,31 @@ class BootReceiver : BroadcastReceiver() {
                     calendar.add(Calendar.WEEK_OF_YEAR, 1)
                 }
 
+                // Bitiş tarihini aştıysa kurma
+                if (medicine.endDate != 0L) {
+                    val endCal = Calendar.getInstance().apply {
+                        timeInMillis = medicine.endDate
+                        set(Calendar.HOUR_OF_DAY, 23)
+                        set(Calendar.MINUTE, 59)
+                    }
+                    if (calendar.timeInMillis > endCal.timeInMillis) continue
+                }
+
                 val alarmIntent = Intent(context, AlarmReceiver::class.java)
+                alarmIntent.putExtra("MEDICINE_ID", medicine.id)
                 alarmIntent.putExtra("MEDICINE_NAME", medicine.name)
                 alarmIntent.putExtra("MEDICINE_TIME", singleTime)
                 alarmIntent.putExtra("MEDICINE_NOTE", medicine.note)
                 alarmIntent.putExtra("START_DATE", 0L)
-                alarmIntent.putExtra("END_DATE", 0L)
+                alarmIntent.putExtra("END_DATE", medicine.endDate)
                 alarmIntent.putExtra("INTERVAL_DAYS", 1)
                 alarmIntent.putExtra("SOUND_URI", medicine.soundUri)
+                alarmIntent.putExtra("MEAL_TIMING", medicine.mealTiming)
                 alarmIntent.putExtra("IS_CUSTOM_DAY", true)
                 alarmIntent.putExtra("CUSTOM_DAY", calDay)
                 alarmIntent.putExtra(AlarmReceiver.EXTRA_IS_RESET, false)
 
-                val alarmId = AlarmHelper.safeId(medicine.name + "_day" + calDay + "_" + singleTime)
+                val alarmId = AlarmHelper.getCustomDayAlarmId(medicine, calDay, singleTime)
                 alarmIntent.putExtra("ALARM_ID", alarmId)
 
                 val pi = PendingIntent.getBroadcast(
@@ -141,7 +193,8 @@ class BootReceiver : BroadcastReceiver() {
                 AlarmReceiver.scheduleNextCustomDayResetAlarm(
                     context,
                     medicine.name, singleTime, alarmId,
-                    calDay, medicine.soundUri,
+                    calDay, medicine.soundUri, medicine.endDate,
+                    medicine.id,
                 )
             }
         }

@@ -31,10 +31,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -46,9 +48,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import com.YucelDigital.ilactakip.ui.theme.IlacTakipTheme
 import java.util.Calendar
-import java.util.Random
 
 class AlarmActivity : AppCompatActivity() {
 
@@ -62,9 +64,11 @@ class AlarmActivity : AppCompatActivity() {
         }
     }
 
+    private var medicineId: String? = null
     private var medicineName: String? = null
     private var medicineTime: String? = null
     private var medicineNote: String? = null
+    private var mealTiming: String? = null
     private var notificationId = 0
     private var startDate: Long = 0
     private var endDate: Long = 0
@@ -73,13 +77,12 @@ class AlarmActivity : AppCompatActivity() {
     private var isCustomDay = false
     private var customDay = 0
 
-    // Erteleme onay mesajı (null = normal alarm ekranı gösterilir). Compose-gözlemli:
-    // ertelenince bu doldurulup ekranda bir onay pop-up'ı çıkıyor, sonra ekran kapanıyor.
     private val snoozeConfirm = mutableStateOf<String?>(null)
 
     companion object {
-        private const val ALARM_TIMEOUT_MS = 5 * 60 * 1000L // 5 dakika
-        private const val SNOOZE_CONFIRM_MS = 4000L // erteleme onayının ekranda kalma süresi
+        private const val ALARM_TIMEOUT_MS = 5 * 60 * 1000L // 5 dakika sonra otomatik ertele
+        private const val SNOOZE_CONFIRM_MS = 3000L // erteleme onayının ekranda kalma süresi
+        private const val SNOOZE_DURATION_MINUTES = 10 // Standart 10 dakika erteleme
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,10 +99,10 @@ class AlarmActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            // Kilidi aktif olarak kaldır (Android 8.1+)
             val km = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
             km?.requestDismissKeyguard(this, null)
         } else {
+            @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                     or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
@@ -107,13 +110,14 @@ class AlarmActivity : AppCompatActivity() {
                     or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
-        // Ekranın hemen tekrar kapanmasını önle
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // Intent Verilerini Al
+        medicineId = intent.getStringExtra("MEDICINE_ID")
         medicineName = intent.getStringExtra("MEDICINE_NAME")
         medicineTime = intent.getStringExtra("MEDICINE_TIME")
         medicineNote = intent.getStringExtra("MEDICINE_NOTE")
+        mealTiming = intent.getStringExtra("MEAL_TIMING")
         notificationId = intent.getIntExtra("ALARM_ID", 0)
         startDate = intent.getLongExtra("START_DATE", 0)
         endDate = intent.getLongExtra("END_DATE", 0)
@@ -131,6 +135,7 @@ class AlarmActivity : AppCompatActivity() {
                     medicineName = medicineName ?: "İlaç Zamanı",
                     medicineTime = medicineTime ?: "",
                     medicineNote = medicineNote,
+                    mealTiming = mealTiming,
                     snoozeMessage = snoozeConfirm.value,
                     onStop = {
                         timeoutHandler.removeCallbacksAndMessages(null)
@@ -139,13 +144,13 @@ class AlarmActivity : AppCompatActivity() {
                         markAsTaken()
                         finish()
                     },
-                    onSnooze = { handleRandomSnooze() },
+                    onSnooze = { performSnooze(SNOOZE_DURATION_MINUTES) },
                 )
             }
         }
 
-        // 5 dakika sonra otomatik ertele (kullanıcı cevap vermezse)
-        timeoutHandler.postDelayed({ performSnooze(5) }, ALARM_TIMEOUT_MS)
+        // 5 dakika sonra otomatik 10 dakika ertele (kullanıcı cevap vermezse)
+        timeoutHandler.postDelayed({ performSnooze(SNOOZE_DURATION_MINUTES) }, ALARM_TIMEOUT_MS)
     }
 
     private fun clearNotification() {
@@ -153,16 +158,8 @@ class AlarmActivity : AppCompatActivity() {
         nm?.cancel(notificationId)
     }
 
-    private fun handleRandomSnooze() {
-        val possibleMinutes = intArrayOf(5, 10, 15, 20, 25, 30, 35, 40, 45)
-        val randomMinute = possibleMinutes[Random().nextInt(possibleMinutes.size)]
-        performSnooze(randomMinute)
-    }
-
     /**
-     * Ertele: sesi durdur, bildirimi kapat, alarmı yeniden kur; sonra ekranda bir onay
-     * pop-up'ı gösterip (SNOOZE_CONFIRM_MS) ekranı kapat. Onay Toast'tan farklı olarak
-     * süresini biz kontrol ediyoruz.
+     * Ertele: sesi durdur, bildirimi kapat, alarmı yeniden kur; sonra onay gösterip ekranı kapat.
      */
     private fun performSnooze(minutes: Int) {
         timeoutHandler.removeCallbacksAndMessages(null)
@@ -174,14 +171,12 @@ class AlarmActivity : AppCompatActivity() {
     }
 
     private fun markAsTaken() {
-        MedicineRepository.markAsTaken(this, medicineName, medicineTime)
+        MedicineRepository.markAsTaken(this, medicineName, medicineTime, medicineId)
     }
 
     private fun playAlarmSound() {
         val soundUri = AlarmReceiver.resolveSoundUri(soundUriStr)
         if (!startPlayback(soundUri, isFallback = false)) {
-            // Seçilen/çözümlenen ses hiç kurulamadıysa (uri null, dosya silinmiş vb.)
-            // sessiz kalmak yerine sistemin varsayılan alarm sesine düş.
             playDefaultAlarmSound()
         }
     }
@@ -192,13 +187,6 @@ class AlarmActivity : AppCompatActivity() {
         startPlayback(fallbackUri, isFallback = true)
     }
 
-    /**
-     * Verilen sesle çalmayı dener. Kurulum senkron olarak başarısız olursa (setDataSource
-     * fırlatırsa) false döner ve çağıran taraf varsayılana düşebilir. Kurulum kabul edilip
-     * hazırlık asenkron olarak başarısız olursa (bozuk/silinmiş özel ses dosyası gibi),
-     * setOnErrorListener kendisi varsayılana düşer — bu yüzden fallback denemesinde
-     * (isFallback = true) sonsuz döngüye girmemek için hata dinleyicisi eklenmiyor.
-     */
     private fun startPlayback(soundUri: Uri?, isFallback: Boolean): Boolean {
         if (soundUri == null) return false
         return try {
@@ -212,9 +200,7 @@ class AlarmActivity : AppCompatActivity() {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build(),
             )
-            player.isLooping = true // Ses tekrar tekrar çalar
-            // prepare() ana thread'i bloklar (özellikle content:// URI'lerde ANR riski);
-            // prepareAsync() + listener kullanılıyor.
+            player.isLooping = true
             player.setOnPreparedListener { mp -> mp.start() }
             if (!isFallback) {
                 player.setOnErrorListener { mp, _, _ ->
@@ -244,11 +230,12 @@ class AlarmActivity : AppCompatActivity() {
         }
     }
 
-    /** Alarmı belirli dakika sonraya ertele, tarih metadata'sını koruyarak */
+    /** Alarmı belirtilen dakika sonraya ertele */
     private fun snoozeAlarm(minutes: Int) {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
         val snoozeIntent = Intent(this, AlarmReceiver::class.java)
+        snoozeIntent.putExtra("MEDICINE_ID", medicineId)
         snoozeIntent.putExtra("MEDICINE_NAME", medicineName)
         snoozeIntent.putExtra("MEDICINE_TIME", medicineTime)
         snoozeIntent.putExtra("MEDICINE_NOTE", medicineNote)
@@ -259,6 +246,7 @@ class AlarmActivity : AppCompatActivity() {
         snoozeIntent.putExtra("SOUND_URI", soundUriStr)
         snoozeIntent.putExtra("IS_CUSTOM_DAY", isCustomDay)
         snoozeIntent.putExtra("CUSTOM_DAY", customDay)
+        snoozeIntent.putExtra("MEAL_TIMING", mealTiming)
 
         val pi = PendingIntent.getBroadcast(
             this, notificationId, snoozeIntent,
@@ -277,7 +265,6 @@ class AlarmActivity : AppCompatActivity() {
         } else {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
         }
-        // Onay artık ekran içi pop-up ile gösteriliyor (bkz. performSnooze), Toast kaldırıldı.
     }
 
     override fun onDestroy() {
@@ -292,11 +279,12 @@ class AlarmActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Ses tuşuna basıldığında alarmı sustur, 10 dk ertele ve ekranı kapat (cepte açık kalmasını önle)
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
             keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
             keyCode == KeyEvent.KEYCODE_VOLUME_MUTE
         ) {
-            stopAlarmSound()
+            performSnooze(SNOOZE_DURATION_MINUTES)
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -308,14 +296,11 @@ private fun AlarmScreen(
     medicineName: String,
     medicineTime: String,
     medicineNote: String?,
+    mealTiming: String?,
     snoozeMessage: String?,
     onStop: () -> Unit,
     onSnooze: () -> Unit,
 ) {
-    // Zemin ve metin, M3 rol çifti primaryContainer / onPrimaryContainer ile — bu çift her
-    // dinamik palette (açık/koyu duvar kağıdı) garantili kontrast verir. Eskiden zemin doygun
-    // "primary", metin ise sabit beyaz'dı; primary açık bir pastel olduğunda beyaz metin
-    // okunamıyordu. Bu yaklaşım "renkli/özel alarm" hissini korurken okunabilirliği garantiler.
     val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
@@ -324,7 +309,6 @@ private fun AlarmScreen(
             .background(MaterialTheme.colorScheme.primaryContainer),
     ) {
         if (snoozeMessage != null) {
-            // Erteleme onayı — ekran kapanmadan önce SNOOZE_CONFIRM_MS boyunca gösterilir.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -332,7 +316,6 @@ private fun AlarmScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                // Tonal rozet: saat ikonuyla belirgin, düzgün boyutlu bir daire
                 Box(
                     modifier = Modifier
                         .size(116.dp)
@@ -364,7 +347,6 @@ private fun AlarmScreen(
             return@Box
         }
 
-        // İnce tonal hale — büyük saatin arkasında hafif bir derinlik
         Box(
             modifier = Modifier
                 .size(240.dp)
@@ -405,6 +387,23 @@ private fun AlarmScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+
+                if (!mealTiming.isNullOrEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = onContainer.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            text = "🍽️ $mealTiming",
+                            color = onContainer,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+
                 Text(
                     text = formatTimeForDisplay(LocalContext.current, medicineTime),
                     color = onContainer,
@@ -412,6 +411,7 @@ private fun AlarmScreen(
                     fontWeight = FontWeight.Normal,
                     modifier = Modifier.padding(top = 16.dp),
                 )
+
                 if (!medicineNote.isNullOrEmpty()) {
                     Text(
                         text = "Not: $medicineNote",
@@ -423,7 +423,6 @@ private fun AlarmScreen(
                 }
             }
 
-            // Asıl eylem: dolu M3 Button (primary) — renkli zeminde en güçlü çağrı.
             Button(
                 onClick = onStop,
                 modifier = Modifier
@@ -435,16 +434,30 @@ private fun AlarmScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // İkincil eylem: tonal M3 Button (secondaryContainer) — beyaz çerçeveli yerine
-            // paletle uyumlu, okunur bir ikincil buton.
             FilledTonalButton(
                 onClick = onSnooze,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
             ) {
-                Text("Ertele", fontSize = 16.sp)
+                Text("10 Dk Ertele", fontSize = 16.sp)
             }
         }
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun AlarmScreenPreview() {
+    IlacTakipTheme {
+        AlarmScreen(
+            medicineName = "Aspirin",
+            medicineTime = "09:00",
+            medicineNote = "Kahvaltıdan hemen sonra bol su ile içiniz",
+            mealTiming = "Tok Karnına",
+            snoozeMessage = null,
+            onStop = {},
+            onSnooze = {},
+        )
     }
 }
